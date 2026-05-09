@@ -538,14 +538,6 @@ import { initializeApp, getApps }
   from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
 
 import {
-  getAuth,
-  setPersistence,
-  browserLocalPersistence,
-  signInAnonymously,
-  onAuthStateChanged,
-} from "https://www.gstatic.com/firebasejs/12.13.0/firebase-auth.js";
-
-import {
   getFirestore,
   enableMultiTabIndexedDbPersistence,
   collection,
@@ -574,7 +566,6 @@ const FIREBASE_CONFIG = {
 
 // Singleton: reuse existing app if already initialized
 const _app = getApps().length ? getApps()[0] : initializeApp(FIREBASE_CONFIG);
-const _auth = getAuth(_app);
 const _db   = getFirestore(_app);
 
 // Enable multi-tab IndexedDB persistence for offline support.
@@ -699,13 +690,10 @@ function _handleFirebaseError(context, err, fatal = true) {
 const _syncEngine = (() => {
   // ── Internal state ─────────────────────────────────────────────
 
-  // Current UI status: 'syncing' | 'synced' | 'offline' | 'error' | 'loading'
-  let _status = 'loading';
+  // Current UI status: 'syncing' | 'synced' | 'offline' | 'error'
+  let _status = 'syncing';
 
-  // Authenticated user ID — set once after successful auth
-  let _uid = null;
-
-  // Firestore document refs (set after auth)
+  // Firestore document refs (set on boot)
   let _refs = null;
 
   // Active onSnapshot unsubscribers — keyed by ref name
@@ -723,14 +711,6 @@ const _syncEngine = (() => {
   // Last known remote data (shallow merge of all docs)
   let _remoteSnapshot = {};
 
-  // Track whether auth listener is already bound (prevent duplicates)
-  let _authListenerBound = false;
-
-  // Auth retry state
-  let _authRetryTimer = null;
-  let _authRetryCount = 0;
-  const MAX_AUTH_RETRIES = 5;
-
   // ── Public API ──────────────────────────────────────────────────
 
   return {
@@ -744,105 +724,48 @@ const _syncEngine = (() => {
     },
 
     getStatus() { return _status; },
-    getUid()    { return _uid; },
 
     // ── Auth lifecycle ──────────────────────────────────────────
 
+    // ── Boot ────────────────────────────────────────────────────
+
     /**
-     * Initializes Firebase auth. Binds the auth state listener exactly once.
-     * If offline on boot, defers until online.
+     * Boots the sync engine directly — no auth required.
+     * Connects straight to the shared Firestore documents.
      */
     async boot() {
       if (!navigator.onLine) {
         this.setStatus('offline');
-        // Render UI with whatever state is in memory (empty defaults)
         _renderAll();
         return;
       }
-      this.setStatus('loading');
-      this._bindAuthListener();
-    },
+      this.setStatus('syncing');
 
-    /**
-     * Binds onAuthStateChanged exactly once.
-     * Guards against duplicate bindings with _authListenerBound flag.
-     */
-    _bindAuthListener() {
-      if (_authListenerBound) return;
-      _authListenerBound = true;
+      try {
+        // Set shared refs immediately — no uid, no auth
+        _refs = _getRefs();
 
-      // Ensure auth session persists across page refreshes via localStorage
-      setPersistence(_auth, browserLocalPersistence)
-        .catch(err => console.warn("[Auth] setPersistence failed:", err.message))
-        .finally(() => {
-          // Whether or not persistence worked, proceed with auth state binding
-          onAuthStateChanged(_auth, async (user) => {
-            try {
-              if (user) {
-                // ── Successfully authenticated ──────────────
-                _uid = user.uid;
-                _authRetryCount = 0; // reset retry counter on success
-                console.info("[Auth] Authenticated. UID:", _uid);
+        // Ensure all shared docs exist (creates them on first run)
+        await this._ensureDocsExist();
 
-                // Shared mode: refs are fixed paths, no uid needed
-                _refs = _getRefs();
+        // Subscribe to real-time updates
+        await this._subscribeAll();
 
-                // Run one-time localStorage migration if applicable
-                await this._migrateFromLocalStorage();
-
-                // Ensure all Firestore docs exist before subscribing
-                await this._ensureDocsExist();
-
-                // Subscribe to real-time sync
-                await this._subscribeAll();
-
-              } else {
-                // ── No user — sign in anonymously ──────────
-                console.info("[Auth] No session. Signing in anonymously...");
-                this.setStatus('loading');
-                await signInAnonymously(_auth);
-                // onAuthStateChanged fires again with the new user above
-              }
-            } catch (err) {
-              console.error("[Auth] Error in auth state handler:", err.code, err.message);
-              _handleFirebaseError('auth-state-handler', err);
-              this._scheduleAuthRetry();
-            }
-          });
-        });
-    },
-
-    /**
-     * Schedules an auth retry with exponential backoff.
-     * Resets _authListenerBound so a fresh listener can be registered.
-     * Max retries: MAX_AUTH_RETRIES.
-     */
-    _scheduleAuthRetry() {
-      if (_authRetryCount >= MAX_AUTH_RETRIES) {
-        console.error("[Auth] Max retries reached. Giving up.");
-        this.setStatus('error');
-        return;
-      }
-
-      _authRetryCount++;
-      const delay = Math.min(1000 * Math.pow(2, _authRetryCount), 30000); // exponential, max 30s
-      console.info(`[Auth] Retry ${_authRetryCount}/${MAX_AUTH_RETRIES} in ${delay}ms...`);
-
-      if (_authRetryTimer) clearTimeout(_authRetryTimer);
-      _authRetryTimer = setTimeout(() => {
-        if (navigator.onLine && !_uid) {
-          _authListenerBound = false; // allow re-binding
-          this._bindAuthListener();
+      } catch (err) {
+        console.error("[Boot] Failed:", err.message);
+        _handleFirebaseError('boot', err);
+        // Retry after 3s if online
+        if (navigator.onLine) {
+          setTimeout(() => this.boot(), 3000);
         }
-      }, delay);
+      }
     },
 
     // ── Document initialization ─────────────────────────────────
 
     /**
-     * Ensures all required Firestore documents exist.
-     * Uses setDoc with merge:true — safe to call even if docs already exist.
-     * Creates only the fields that are missing; never overwrites existing data.
+     * Ensures all required shared Firestore documents exist.
+     * Safe to call on every boot — only creates if missing.
      */
     async _ensureDocsExist() {
       const blanks = _blankDocs();
@@ -982,8 +905,8 @@ const _syncEngine = (() => {
      * @param {object} payload — the data fields to write/merge
      */
     write(key, payload) {
-      if (!_uid || !_refs) {
-        console.warn("[SyncEngine] Write called before auth. Skipping.");
+      if (!_refs) {
+        console.warn("[SyncEngine] Write called before refs initialized. Skipping.");
         return;
       }
 
@@ -1056,14 +979,12 @@ const _syncEngine = (() => {
      */
     async handleOnline() {
       console.info("[Network] Back online.");
-      if (!_uid) {
-        // Not yet authenticated — retry boot
-        this.setStatus('loading');
-        _authListenerBound = false;
-        this._bindAuthListener();
+      this.setStatus('syncing');
+      if (!_refs) {
+        // Not yet connected — boot fresh
+        await this.boot();
       } else {
-        // Already authenticated — re-subscribe (tears down stale listeners first)
-        this.setStatus('syncing');
+        // Already connected — re-subscribe (tears down stale listeners first)
         await this._subscribeAll();
       }
     },
@@ -1072,51 +993,6 @@ const _syncEngine = (() => {
     handleOffline() {
       console.info("[Network] Gone offline.");
       this.setStatus('offline');
-    },
-
-    // ── Migration ───────────────────────────────────────────────
-
-    /**
-     * One-time migration from localStorage to Firestore.
-     * Runs only if the old localStorage key exists and the user is authenticated.
-     * Clears localStorage after successful migration.
-     */
-    async _migrateFromLocalStorage() {
-      const LS_KEY = "fce-ar-v2";
-      let raw;
-      try { raw = localStorage.getItem(LS_KEY); } catch { return; }
-      if (!raw) return;
-
-      try {
-        const parsed = JSON.parse(raw);
-        if (!parsed || typeof parsed !== 'object') return;
-
-        console.info("[Migrate] Found localStorage data. Migrating to Firestore...");
-
-        // Map old flat state to new collection structure
-        const migrations = [
-          ['contentProgress', { checked: parsed.checked || {}, notes: parsed.notes || {} }],
-          ['silenceProgress', { silDone: parsed.silDone || {}, silExp: parsed.silExp || {} }],
-          ['vaultPrompts',    { prompts: parsed.prompts || [] }],
-          ['vaultLinks',      { links: parsed.links || [] }],
-          ['uiState',         { cExp: parsed.cExp || {} }],
-        ];
-
-        await Promise.allSettled(migrations.map(async ([key, data]) => {
-          if (_refs?.[key]) {
-            await setDoc(_refs[key], {
-              ...data,
-              _migratedAt: serverTimestamp(),
-            }, { merge: true });
-          }
-        }));
-
-        localStorage.removeItem(LS_KEY);
-        console.info("[Migrate] Done. localStorage cleared.");
-      } catch (err) {
-        console.warn("[Migrate] Failed:", err.message);
-        // Non-fatal — old data stays in localStorage for next attempt
-      }
     },
 
   }; // end _syncEngine return
@@ -1129,7 +1005,6 @@ const _syncEngine = (() => {
 // ══════════════════════════════════════════════════════════════════
 
 const STATUS_CONFIG = {
-  loading: { label: '⏳ تحميل...',       cls: 'syncing' },
   syncing: { label: '🔄 مزامنة...',       cls: 'syncing' },
   synced:  { label: '✅ تمت المزامنة',    cls: 'synced'  },
   offline: { label: '⚠️ غير متصل',       cls: 'offline' },
