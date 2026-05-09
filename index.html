@@ -599,24 +599,22 @@ enableMultiTabIndexedDbPersistence(_db).catch((err) => {
 // ══════════════════════════════════════════════════════════════════
 
 /**
- * Returns all Firestore document refs for the authenticated user.
- * Throws if called before auth is established.
- * @param {string} uid — authenticated user ID
+ * Returns all Firestore document refs.
+ * SHARED MODE: all devices read/write the same fixed documents.
+ * Path: shared/falcfit/appData/{docName}
+ * No UID in the path — every authenticated device shares the same data.
  */
-function _getRefs(uid) {
-  if (!uid) throw new Error("[Firestore] _getRefs called before auth.");
+function _getRefs() {
   return {
-    // User profile / settings
-    user:            doc(_db, "users", uid),
     // Per-card progress (checked state + notes)
-    contentProgress: doc(_db, "users", uid, "appData", "contentProgress"),
+    contentProgress: doc(_db, "shared", "falcfit", "appData", "contentProgress"),
     // Silence phase progress
-    silenceProgress: doc(_db, "users", uid, "appData", "silenceProgress"),
-    // Vault: prompts and links stored in sub-documents
-    vaultPrompts:    doc(_db, "users", uid, "appData", "vaultPrompts"),
-    vaultLinks:      doc(_db, "users", uid, "appData", "vaultLinks"),
-    // UI expand/collapse state (non-critical, in-memory acceptable but synced for consistency)
-    uiState:         doc(_db, "users", uid, "appData", "uiState"),
+    silenceProgress: doc(_db, "shared", "falcfit", "appData", "silenceProgress"),
+    // Vault: prompts and links
+    vaultPrompts:    doc(_db, "shared", "falcfit", "appData", "vaultPrompts"),
+    vaultLinks:      doc(_db, "shared", "falcfit", "appData", "vaultLinks"),
+    // UI expand/collapse state
+    uiState:         doc(_db, "shared", "falcfit", "appData", "uiState"),
   };
 }
 
@@ -786,7 +784,8 @@ const _syncEngine = (() => {
                 _authRetryCount = 0; // reset retry counter on success
                 console.info("[Auth] Authenticated. UID:", _uid);
 
-                _refs = _getRefs(_uid);
+                // Shared mode: refs are fixed paths, no uid needed
+                _refs = _getRefs();
 
                 // Run one-time localStorage migration if applicable
                 await this._migrateFromLocalStorage();
@@ -848,18 +847,16 @@ const _syncEngine = (() => {
     async _ensureDocsExist() {
       const blanks = _blankDocs();
       const promises = Object.entries(_refs)
-        .filter(([key]) => key !== 'user') // skip user profile ref
         .map(async ([key, ref]) => {
           try {
             const snap = await getDoc(ref);
             if (!snap.exists()) {
-              // Doc doesn't exist yet — create with blank defaults
+              // Doc doesn't exist yet — create with blank defaults (shared, no uid)
               await setDoc(ref, {
                 ...blanks[key],
                 _createdAt: serverTimestamp(),
-                _uid,
               });
-              console.info(`[Firestore] Created doc: ${key}`);
+              console.info(`[Firestore] Created shared doc: ${key}`);
             }
           } catch (err) {
             _handleFirebaseError(`ensureDoc:${key}`, err, false);
@@ -1021,7 +1018,6 @@ const _syncEngine = (() => {
         await updateDoc(_refs[key], {
           ...payload,
           _updatedAt: serverTimestamp(),
-          _uid,
         });
         _statusDebounce('synced');
       } catch (err) {
@@ -1033,7 +1029,6 @@ const _syncEngine = (() => {
               ...payload,
               _createdAt: serverTimestamp(),
               _updatedAt: serverTimestamp(),
-              _uid,
             });
             _statusDebounce('synced');
           } catch (innerErr) {
@@ -1112,7 +1107,6 @@ const _syncEngine = (() => {
             await setDoc(_refs[key], {
               ...data,
               _migratedAt: serverTimestamp(),
-              _uid,
             }, { merge: true });
           }
         }));
@@ -1752,17 +1746,14 @@ async function resetAll() {
     checked: {}, notes: {}, silDone: {}, silExp: {}, cExp: {}, prompts: [], links: []
   });
 
-  // Write blank state to all Firestore docs
-  const uid = _syncEngine.getUid();
-  if (uid) {
-    const refs = _getRefs(uid);
-    await Promise.allSettled(
-      Object.entries(blanks).map(([key, data]) =>
-        setDoc(refs[key], { ...data, _resetAt: serverTimestamp(), _uid: uid }, { merge: false })
-          .catch(err => console.error(`[Reset] Failed for ${key}:`, err.message))
-      )
-    );
-  }
+  // Write blank state to all shared Firestore docs
+  const refs = _getRefs();
+  await Promise.allSettled(
+    Object.entries(blanks).map(([key, data]) =>
+      setDoc(refs[key], { ...data, _resetAt: serverTimestamp() }, { merge: false })
+        .catch(err => console.error(`[Reset] Failed for ${key}:`, err.message))
+    )
+  );
 
   _renderAll();
 }
