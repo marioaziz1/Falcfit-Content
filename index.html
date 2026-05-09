@@ -37,6 +37,57 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--tx);min-hei
 .ring-lbl{font-size:10px;color:var(--mu);text-align:center;line-height:1.5}
 .ring-svg{transform:rotate(-90deg)}
 
+/* ══ SYNC STATUS INDICATOR ══ */
+.sync-pill{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:4px 10px 4px 8px;border-radius:100px;
+  font-size:10px;font-weight:700;font-family:'Cairo',sans-serif;
+  border:.5px solid transparent;
+  transition:background .3s,color .3s,border-color .3s,opacity .3s;
+  cursor:default;user-select:none;letter-spacing:.03em;
+  /* sits below the ring */
+  margin-top:8px;
+}
+.sync-dot{
+  width:6px;height:6px;border-radius:50%;flex-shrink:0;
+  transition:background .3s;
+}
+
+/* syncing — yellow, pulsing dot */
+.sync-pill.syncing{
+  color:#c8a010;border-color:rgba(200,160,16,0.30);
+  background:rgba(200,160,16,0.10);
+}
+.sync-pill.syncing .sync-dot{
+  background:#c8a010;
+  animation:sync-pulse 1s ease-in-out infinite;
+}
+@keyframes sync-pulse{
+  0%,100%{opacity:1;transform:scale(1)}
+  50%{opacity:.35;transform:scale(.75)}
+}
+
+/* synced — green */
+.sync-pill.synced{
+  color:#22aa58;border-color:rgba(34,170,88,0.26);
+  background:rgba(34,170,88,0.08);
+}
+.sync-pill.synced .sync-dot{background:#22aa58}
+
+/* offline — orange */
+.sync-pill.offline{
+  color:#e8622a;border-color:rgba(232,98,42,0.28);
+  background:rgba(232,98,42,0.10);
+}
+.sync-pill.offline .sync-dot{background:#e8622a}
+
+/* error — red */
+.sync-pill.error{
+  color:#c03858;border-color:rgba(192,56,88,0.28);
+  background:rgba(192,56,88,0.10);
+}
+.sync-pill.error .sync-dot{background:#c03858}
+
 /* ══ MAIN TABS ══ */
 .mtabs{display:flex;border-bottom:.5px solid var(--b);overflow-x:auto;scrollbar-width:none}
 .mtabs::-webkit-scrollbar{display:none}
@@ -298,6 +349,11 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--tx);min-hei
         style="transition:stroke-dashoffset .5s cubic-bezier(.4,0,.2,1)"/>
     </svg>
     <div class="ring-lbl">قطعة<br>مكتملة</div>
+    <!-- ── Sync status indicator ── -->
+    <div class="sync-pill syncing" id="sync-pill" title="حالة المزامنة">
+      <span class="sync-dot"></span>
+      <span id="sync-label">مزامنة...</span>
+    </div>
   </div>
 </header>
 
@@ -470,165 +526,771 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--tx);min-hei
 </div><!-- /wrap -->
 
 <script type="module">
-// ══════════════════════════════════════════════
-//  FIREBASE — INIT
-// ══════════════════════════════════════════════
-import { initializeApp }               from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
-import { getAnalytics }                from "https://www.gstatic.com/firebasejs/12.13.0/firebase-analytics.js";
+// ══════════════════════════════════════════════════════════════════
+//  FIREBASE — PRODUCTION-GRADE REBUILD
+//  Architecture: Singleton init → Auth → Firestore → SyncEngine
+//  All imports are static (top-level). No dynamic imports at runtime.
+//  Firebase SDK: v12.13.0 (Modular)
+// ══════════════════════════════════════════════════════════════════
+
+// ── IMPORTS ───────────────────────────────────────────────────────
+import { initializeApp, getApps }
+  from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
+
 import {
   getAuth,
+  setPersistence,
+  browserLocalPersistence,
   signInAnonymously,
-  onAuthStateChanged
+  onAuthStateChanged,
 } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-auth.js";
+
 import {
   getFirestore,
+  enableMultiTabIndexedDbPersistence,
+  collection,
   doc,
-  getDoc,
   setDoc,
-  onSnapshot
+  updateDoc,
+  getDoc,
+  onSnapshot,
+  serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js";
 
-const firebaseConfig = {
+
+// ══════════════════════════════════════════════════════════════════
+//  SECTION 1 — FIREBASE INITIALIZATION (SINGLETON)
+//  Safe against double-init across HMR / module re-evaluation.
+// ══════════════════════════════════════════════════════════════════
+
+const FIREBASE_CONFIG = {
   apiKey:            "AIzaSyCmJdBddLY6CcmDPk9KDYHVLfq9YXL_kHE",
   authDomain:        "falcfit-content.firebaseapp.com",
   projectId:         "falcfit-content",
   storageBucket:     "falcfit-content.firebasestorage.app",
   messagingSenderId: "657344464968",
   appId:             "1:657344464968:web:1e1575c6250e2bc410b07d",
-  measurementId:     "G-2CWLW8BGED"
 };
 
-// ── Singletons ──────────────────────────────
-const app       = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
-const auth      = getAuth(app);
-const db        = getFirestore(app);
+// Singleton: reuse existing app if already initialized
+const _app = getApps().length ? getApps()[0] : initializeApp(FIREBASE_CONFIG);
+const _auth = getAuth(_app);
+const _db   = getFirestore(_app);
 
-// ── Current signed-in user (set after auth) ─
-let _userId       = null;
-let _unsubscribe  = null;   // onSnapshot teardown
+// Enable multi-tab IndexedDB persistence for offline support.
+// Must be called before any Firestore operations.
+// Fails gracefully in private browsing or if another tab beat us to it.
+enableMultiTabIndexedDbPersistence(_db).catch((err) => {
+  if (err.code === 'failed-precondition') {
+    // Multiple tabs open — offline persistence only active in one tab at a time.
+    console.warn("[Firestore] Multi-tab persistence unavailable. Another tab may be active.");
+  } else if (err.code === 'unimplemented') {
+    // Browser does not support IndexedDB.
+    console.warn("[Firestore] IndexedDB not supported in this browser.");
+  }
+  // Non-fatal — app continues without local persistence.
+});
 
-// ══════════════════════════════════════════════
-//  FIREBASE — PUBLIC API
-// ══════════════════════════════════════════════
 
-/** Return the Firestore document reference for the current user. */
-function _userDocRef() {
-  if (!_userId) throw new Error("User not authenticated yet.");
-  return doc(db, "users", _userId, "appData", "main");
-}
+// ══════════════════════════════════════════════════════════════════
+//  SECTION 2 — FIRESTORE DOCUMENT REFERENCES
+//  Scalable collection structure. Each concern has its own doc/collection.
+//  Never stores all app state in a single document.
+// ══════════════════════════════════════════════════════════════════
 
-/** Default shape guaranteed to exist in Firestore. */
-function _defaultData() {
-  return { checked: {}, notes: {}, silDone: {}, silExp: {}, cExp: {}, prompts: [], links: [] };
+/**
+ * Returns all Firestore document refs for the authenticated user.
+ * Throws if called before auth is established.
+ * @param {string} uid — authenticated user ID
+ */
+function _getRefs(uid) {
+  if (!uid) throw new Error("[Firestore] _getRefs called before auth.");
+  return {
+    // User profile / settings
+    user:            doc(_db, "users", uid),
+    // Per-card progress (checked state + notes)
+    contentProgress: doc(_db, "users", uid, "appData", "contentProgress"),
+    // Silence phase progress
+    silenceProgress: doc(_db, "users", uid, "appData", "silenceProgress"),
+    // Vault: prompts and links stored in sub-documents
+    vaultPrompts:    doc(_db, "users", uid, "appData", "vaultPrompts"),
+    vaultLinks:      doc(_db, "users", uid, "appData", "vaultLinks"),
+    // UI expand/collapse state (non-critical, in-memory acceptable but synced for consistency)
+    uiState:         doc(_db, "users", uid, "appData", "uiState"),
+  };
 }
 
 /**
- * initFirebase()
- * Boots Firebase — called once at app start.
- * Resolves when auth is ready; actual data load handled by onAuthStateChanged.
+ * Returns guaranteed blank shapes for each document.
+ * Always defined so merging is safe even against partial remote data.
  */
-function initFirebase() {
-  return new Promise((resolve) => {
-    onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        _userId = user.uid;
-        await _migrateFromLocalStorage();
-        subscribeToUserData(_onRemoteDataChange);
-        resolve(user);
-      } else {
-        await signInUser();
-        resolve(null);   // onAuthStateChanged will fire again after sign-in
+function _blankDocs() {
+  return {
+    contentProgress: { checked: {}, notes: {} },
+    silenceProgress: { silDone: {}, silExp: {} },
+    vaultPrompts:    { prompts: [] },
+    vaultLinks:      { links: [] },
+    uiState:         { cExp: {} },
+  };
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+//  SECTION 3 — CENTRALIZED ERROR HANDLER
+//  Never fails silently. All Firebase errors surface here.
+// ══════════════════════════════════════════════════════════════════
+
+const RECOVERABLE_ERRORS = new Set([
+  'unavailable',
+  'network-request-failed',
+  'deadline-exceeded',
+]);
+
+/**
+ * Handles Firebase errors centrally.
+ * @param {string} context — human-readable source label for logging
+ * @param {FirebaseError} err — the Firebase error object
+ * @param {boolean} fatal — whether to surface error state in UI
+ */
+function _handleFirebaseError(context, err, fatal = true) {
+  const code = err.code || 'unknown';
+  console.error(`[Firebase][${context}] ${code}: ${err.message}`);
+
+  switch (code) {
+    case 'permission-denied':
+      console.error("[Firebase] Security rules blocked this operation. Check Firestore rules.");
+      if (fatal) _syncEngine.setStatus('error');
+      break;
+
+    case 'unavailable':
+    case 'network-request-failed':
+      // Likely offline — don't mark as error, mark as offline
+      _syncEngine.setStatus('offline');
+      break;
+
+    case 'failed-precondition':
+      console.warn("[Firebase] Operation failed precondition. May be a persistence conflict.");
+      if (fatal) _syncEngine.setStatus('error');
+      break;
+
+    case 'quota-exceeded':
+      console.error("[Firebase] Firestore quota exceeded.");
+      if (fatal) _syncEngine.setStatus('error');
+      break;
+
+    case 'auth/network-request-failed':
+    case 'auth/timeout':
+      console.warn("[Firebase] Auth network issue. Will retry.");
+      _syncEngine.setStatus('offline');
+      break;
+
+    default:
+      if (fatal) _syncEngine.setStatus('error');
+      break;
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+//  SECTION 4 — SYNC ENGINE
+//  The single source of truth for sync state.
+//  Manages: local state, remote state, pending writes queue,
+//           snapshot unsubscribers, debounced writes, conflict merges.
+// ══════════════════════════════════════════════════════════════════
+
+const _syncEngine = (() => {
+  // ── Internal state ─────────────────────────────────────────────
+
+  // Current UI status: 'syncing' | 'synced' | 'offline' | 'error' | 'loading'
+  let _status = 'loading';
+
+  // Authenticated user ID — set once after successful auth
+  let _uid = null;
+
+  // Firestore document refs (set after auth)
+  let _refs = null;
+
+  // Active onSnapshot unsubscribers — keyed by ref name
+  // Prevents duplicate listeners: any existing listener is torn down before a new one attaches.
+  const _unsubscribers = {};
+
+  // Pending write queue: Map<docKey, {data, resolve, reject}>
+  // Batches rapid writes into a single Firestore update per debounce window.
+  const _pendingWrites = new Map();
+
+  // Debounce timers per document key
+  const _debounceTimers = {};
+  const DEBOUNCE_MS = 600; // ms to wait before flushing a write
+
+  // Last known remote data (shallow merge of all docs)
+  let _remoteSnapshot = {};
+
+  // Track whether auth listener is already bound (prevent duplicates)
+  let _authListenerBound = false;
+
+  // Auth retry state
+  let _authRetryTimer = null;
+  let _authRetryCount = 0;
+  const MAX_AUTH_RETRIES = 5;
+
+  // ── Public API ──────────────────────────────────────────────────
+
+  return {
+
+    // ── Status management ───────────────────────────────────────
+
+    /** Sets sync status and updates the UI indicator. */
+    setStatus(status) {
+      _status = status;
+      _applyStatusToUI(status);
+    },
+
+    getStatus() { return _status; },
+    getUid()    { return _uid; },
+
+    // ── Auth lifecycle ──────────────────────────────────────────
+
+    /**
+     * Initializes Firebase auth. Binds the auth state listener exactly once.
+     * If offline on boot, defers until online.
+     */
+    async boot() {
+      if (!navigator.onLine) {
+        this.setStatus('offline');
+        // Render UI with whatever state is in memory (empty defaults)
+        _renderAll();
+        return;
       }
-    });
-  });
-}
+      this.setStatus('loading');
+      this._bindAuthListener();
+    },
 
-/**
- * signInUser()
- * Anonymous sign-in. Safe to call multiple times; Firebase is idempotent.
- */
-async function signInUser() {
-  try {
-    const cred = await signInAnonymously(auth);
-    return cred.user;
-  } catch (err) {
-    console.error("[Firebase] signInAnonymously failed:", err);
-    throw err;
-  }
-}
+    /**
+     * Binds onAuthStateChanged exactly once.
+     * Guards against duplicate bindings with _authListenerBound flag.
+     */
+    _bindAuthListener() {
+      if (_authListenerBound) return;
+      _authListenerBound = true;
 
-/**
- * getUserData()
- * One-time fetch of the user's data from Firestore.
- * Returns the merged default + stored object.
- */
-async function getUserData() {
-  const snap = await getDoc(_userDocRef());
-  if (snap.exists()) {
-    return { ..._defaultData(), ...snap.data() };
-  }
-  const fresh = _defaultData();
-  await setDoc(_userDocRef(), fresh);
-  return fresh;
-}
+      // Ensure auth session persists across page refreshes via localStorage
+      setPersistence(_auth, browserLocalPersistence)
+        .catch(err => console.warn("[Auth] setPersistence failed:", err.message))
+        .finally(() => {
+          // Whether or not persistence worked, proceed with auth state binding
+          onAuthStateChanged(_auth, async (user) => {
+            try {
+              if (user) {
+                // ── Successfully authenticated ──────────────
+                _uid = user.uid;
+                _authRetryCount = 0; // reset retry counter on success
+                console.info("[Auth] Authenticated. UID:", _uid);
 
-/**
- * saveUserData(data)
- * Persists the full state object to Firestore.
- * merge:true ensures we never accidentally wipe unrelated fields.
- */
-async function saveUserData(data) {
-  try {
-    await setDoc(_userDocRef(), data, { merge: true });
-  } catch (err) {
-    console.error("[Firebase] saveUserData failed:", err);
-    throw err;
-  }
-}
+                _refs = _getRefs(_uid);
 
-/**
- * subscribeToUserData(callback)
- * Real-time listener — callback(data) fires on every remote change.
- * Tears down any previous listener before attaching the new one.
- */
-function subscribeToUserData(callback) {
-  if (_unsubscribe) { _unsubscribe(); _unsubscribe = null; }
-  _unsubscribe = onSnapshot(
-    _userDocRef(),
-    (snap) => {
-      if (snap.exists()) {
-        callback({ ..._defaultData(), ...snap.data() });
+                // Run one-time localStorage migration if applicable
+                await this._migrateFromLocalStorage();
+
+                // Ensure all Firestore docs exist before subscribing
+                await this._ensureDocsExist();
+
+                // Subscribe to real-time sync
+                await this._subscribeAll();
+
+              } else {
+                // ── No user — sign in anonymously ──────────
+                console.info("[Auth] No session. Signing in anonymously...");
+                this.setStatus('loading');
+                await signInAnonymously(_auth);
+                // onAuthStateChanged fires again with the new user above
+              }
+            } catch (err) {
+              console.error("[Auth] Error in auth state handler:", err.code, err.message);
+              _handleFirebaseError('auth-state-handler', err);
+              this._scheduleAuthRetry();
+            }
+          });
+        });
+    },
+
+    /**
+     * Schedules an auth retry with exponential backoff.
+     * Resets _authListenerBound so a fresh listener can be registered.
+     * Max retries: MAX_AUTH_RETRIES.
+     */
+    _scheduleAuthRetry() {
+      if (_authRetryCount >= MAX_AUTH_RETRIES) {
+        console.error("[Auth] Max retries reached. Giving up.");
+        this.setStatus('error');
+        return;
+      }
+
+      _authRetryCount++;
+      const delay = Math.min(1000 * Math.pow(2, _authRetryCount), 30000); // exponential, max 30s
+      console.info(`[Auth] Retry ${_authRetryCount}/${MAX_AUTH_RETRIES} in ${delay}ms...`);
+
+      if (_authRetryTimer) clearTimeout(_authRetryTimer);
+      _authRetryTimer = setTimeout(() => {
+        if (navigator.onLine && !_uid) {
+          _authListenerBound = false; // allow re-binding
+          this._bindAuthListener();
+        }
+      }, delay);
+    },
+
+    // ── Document initialization ─────────────────────────────────
+
+    /**
+     * Ensures all required Firestore documents exist.
+     * Uses setDoc with merge:true — safe to call even if docs already exist.
+     * Creates only the fields that are missing; never overwrites existing data.
+     */
+    async _ensureDocsExist() {
+      const blanks = _blankDocs();
+      const promises = Object.entries(_refs)
+        .filter(([key]) => key !== 'user') // skip user profile ref
+        .map(async ([key, ref]) => {
+          try {
+            const snap = await getDoc(ref);
+            if (!snap.exists()) {
+              // Doc doesn't exist yet — create with blank defaults
+              await setDoc(ref, {
+                ...blanks[key],
+                _createdAt: serverTimestamp(),
+                _uid,
+              });
+              console.info(`[Firestore] Created doc: ${key}`);
+            }
+          } catch (err) {
+            _handleFirebaseError(`ensureDoc:${key}`, err, false);
+          }
+        });
+
+      await Promise.allSettled(promises);
+    },
+
+    // ── Real-time subscription management ──────────────────────
+
+    /**
+     * Subscribes to all Firestore documents.
+     * Tears down any existing listeners before creating new ones
+     * to prevent duplicate listeners on reconnect.
+     */
+    async _subscribeAll() {
+      this.setStatus('syncing');
+
+      const docKeys = Object.keys(_refs).filter(k => k !== 'user');
+      for (const key of docKeys) {
+        this._subscribe(key, _refs[key]);
       }
     },
-    (err) => console.error("[Firebase] onSnapshot error:", err)
-  );
-}
 
-// ══════════════════════════════════════════════
-//  MIGRATION — localStorage → Firestore (once)
-// ══════════════════════════════════════════════
-async function _migrateFromLocalStorage() {
-  const LS_KEY = "fce-ar-v2";
-  const raw    = localStorage.getItem(LS_KEY);
-  if (!raw) return;                    // nothing to migrate
+    /**
+     * Attaches a single onSnapshot listener for a given doc.
+     * Tears down the previous listener for that key if one exists.
+     * @param {string} key — logical name (e.g. 'contentProgress')
+     * @param {DocumentReference} ref — Firestore doc reference
+     */
+    _subscribe(key, ref) {
+      // Tear down stale listener before registering a new one
+      if (_unsubscribers[key]) {
+        _unsubscribers[key]();
+        _unsubscribers[key] = null;
+        console.info(`[Firestore] Unsubscribed stale listener: ${key}`);
+      }
 
-  try {
-    const legacy = JSON.parse(raw);
-    if (!legacy || typeof legacy !== "object") throw new Error("bad shape");
+      _unsubscribers[key] = onSnapshot(
+        ref,
+        { includeMetadataChanges: false }, // don't fire for pending local writes
+        (snap) => {
+          if (!snap.exists()) return; // doc deleted — ignore
+          const data = snap.data();
+          // Merge remote data into our snapshot mirror
+          _remoteSnapshot = { ..._remoteSnapshot, ...this._flattenDoc(key, data) };
+          // Apply to in-memory state and re-render
+          this._applyRemoteData(key, data);
+        },
+        (err) => {
+          console.error(`[onSnapshot:${key}]`, err.code, err.message);
+          _handleFirebaseError(`onSnapshot:${key}`, err);
+        }
+      );
 
-    const merged = { ..._defaultData(), ...legacy };
-    await saveUserData(merged);        // push to Firestore
-    localStorage.removeItem(LS_KEY);  // delete localStorage permanently
-    console.info("[Migration] localStorage data uploaded & removed.");
-  } catch (err) {
-    console.error("[Migration] Failed — localStorage left intact:", err);
+      console.info(`[Firestore] Subscribed: ${key}`);
+    },
+
+    /**
+     * Tears down all active snapshot listeners.
+     * Called on sign-out or app teardown.
+     */
+    _unsubscribeAll() {
+      for (const [key, unsub] of Object.entries(_unsubscribers)) {
+        if (unsub) {
+          unsub();
+          _unsubscribers[key] = null;
+          console.info(`[Firestore] Unsubscribed: ${key}`);
+        }
+      }
+    },
+
+    // ── Remote data application ─────────────────────────────────
+
+    /**
+     * Applies remote Firestore data to the in-memory state S.
+     * Uses a conflict-safe merge: remote wins over defaults, local pending writes win over remote.
+     * @param {string} key — which Firestore doc updated
+     * @param {object} data — the document data from Firestore
+     */
+    _applyRemoteData(key, data) {
+      const blank = _blankDocs()[key] || {};
+
+      // Merge: blank defaults < remote data. Strip internal _fields.
+      const clean = {};
+      for (const [k, v] of Object.entries(data)) {
+        if (!k.startsWith('_')) clean[k] = v;
+      }
+      const merged = { ...blank, ...clean };
+
+      // Apply merged data to the global state S
+      Object.assign(S, merged);
+
+      // Re-render affected sections
+      _renderForKey(key);
+      updateRing();
+      this.setStatus('synced');
+    },
+
+    /**
+     * Flattens a Firestore doc's data for snapshot mirroring.
+     * @param {string} key
+     * @param {object} data
+     */
+    _flattenDoc(key, data) {
+      const result = {};
+      for (const [k, v] of Object.entries(data)) {
+        if (!k.startsWith('_')) result[k] = v;
+      }
+      return result;
+    },
+
+    // ── Write engine (debounced, conflict-safe) ─────────────────
+
+    /**
+     * Queues a write to a specific Firestore document.
+     * Debounces rapid writes: only the latest payload is sent after DEBOUNCE_MS.
+     * Uses updateDoc (not setDoc) to prevent overwriting unrelated fields.
+     * Falls back to setDoc with merge:true if the doc doesn't exist.
+     *
+     * @param {string} key — which Firestore doc to write ('contentProgress', etc.)
+     * @param {object} payload — the data fields to write/merge
+     */
+    write(key, payload) {
+      if (!_uid || !_refs) {
+        console.warn("[SyncEngine] Write called before auth. Skipping.");
+        return;
+      }
+
+      // Stale write prevention: only update status if we're not already syncing
+      if (_status !== 'error') {
+        _statusDebounce('syncing');
+      }
+
+      // Queue the write (latest payload wins)
+      _pendingWrites.set(key, payload);
+
+      // Debounce: clear previous timer, set new one
+      if (_debounceTimers[key]) clearTimeout(_debounceTimers[key]);
+      _debounceTimers[key] = setTimeout(() => {
+        this._flush(key);
+      }, DEBOUNCE_MS);
+    },
+
+    /**
+     * Immediately flushes a pending write to Firestore.
+     * @param {string} key — doc key to flush
+     */
+    async _flush(key) {
+      const payload = _pendingWrites.get(key);
+      if (!payload || !_refs?.[key]) return;
+
+      _pendingWrites.delete(key);
+
+      try {
+        // Prefer updateDoc (surgical update, prevents overwrite bugs).
+        // If doc was deleted somehow, fall back to setDoc with merge.
+        await updateDoc(_refs[key], {
+          ...payload,
+          _updatedAt: serverTimestamp(),
+          _uid,
+        });
+        _statusDebounce('synced');
+      } catch (err) {
+        if (err.code === 'not-found') {
+          // Doc was deleted — recreate with setDoc
+          try {
+            await setDoc(_refs[key], {
+              ...(_blankDocs()[key] || {}),
+              ...payload,
+              _createdAt: serverTimestamp(),
+              _updatedAt: serverTimestamp(),
+              _uid,
+            });
+            _statusDebounce('synced');
+          } catch (innerErr) {
+            _handleFirebaseError(`flush:${key}:setDoc`, innerErr);
+          }
+        } else {
+          _handleFirebaseError(`flush:${key}`, err);
+        }
+      }
+    },
+
+    /**
+     * Flushes ALL pending writes immediately (e.g. before page unload).
+     */
+    async flushAll() {
+      const keys = [..._pendingWrites.keys()];
+      await Promise.allSettled(keys.map(k => this._flush(k)));
+    },
+
+    // ── Network recovery ────────────────────────────────────────
+
+    /**
+     * Called when the browser comes back online.
+     * Re-establishes listeners if they were lost.
+     */
+    async handleOnline() {
+      console.info("[Network] Back online.");
+      if (!_uid) {
+        // Not yet authenticated — retry boot
+        this.setStatus('loading');
+        _authListenerBound = false;
+        this._bindAuthListener();
+      } else {
+        // Already authenticated — re-subscribe (tears down stale listeners first)
+        this.setStatus('syncing');
+        await this._subscribeAll();
+      }
+    },
+
+    /** Called when the browser goes offline. */
+    handleOffline() {
+      console.info("[Network] Gone offline.");
+      this.setStatus('offline');
+    },
+
+    // ── Migration ───────────────────────────────────────────────
+
+    /**
+     * One-time migration from localStorage to Firestore.
+     * Runs only if the old localStorage key exists and the user is authenticated.
+     * Clears localStorage after successful migration.
+     */
+    async _migrateFromLocalStorage() {
+      const LS_KEY = "fce-ar-v2";
+      let raw;
+      try { raw = localStorage.getItem(LS_KEY); } catch { return; }
+      if (!raw) return;
+
+      try {
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return;
+
+        console.info("[Migrate] Found localStorage data. Migrating to Firestore...");
+
+        // Map old flat state to new collection structure
+        const migrations = [
+          ['contentProgress', { checked: parsed.checked || {}, notes: parsed.notes || {} }],
+          ['silenceProgress', { silDone: parsed.silDone || {}, silExp: parsed.silExp || {} }],
+          ['vaultPrompts',    { prompts: parsed.prompts || [] }],
+          ['vaultLinks',      { links: parsed.links || [] }],
+          ['uiState',         { cExp: parsed.cExp || {} }],
+        ];
+
+        await Promise.allSettled(migrations.map(async ([key, data]) => {
+          if (_refs?.[key]) {
+            await setDoc(_refs[key], {
+              ...data,
+              _migratedAt: serverTimestamp(),
+              _uid,
+            }, { merge: true });
+          }
+        }));
+
+        localStorage.removeItem(LS_KEY);
+        console.info("[Migrate] Done. localStorage cleared.");
+      } catch (err) {
+        console.warn("[Migrate] Failed:", err.message);
+        // Non-fatal — old data stays in localStorage for next attempt
+      }
+    },
+
+  }; // end _syncEngine return
+})();
+
+
+// ══════════════════════════════════════════════════════════════════
+//  SECTION 5 — SYNC STATUS UI
+//  Debounced status updates with immediate application for critical states.
+// ══════════════════════════════════════════════════════════════════
+
+const STATUS_CONFIG = {
+  loading: { label: '⏳ تحميل...',       cls: 'syncing' },
+  syncing: { label: '🔄 مزامنة...',       cls: 'syncing' },
+  synced:  { label: '✅ تمت المزامنة',    cls: 'synced'  },
+  offline: { label: '⚠️ غير متصل',       cls: 'offline' },
+  error:   { label: '❌ خطأ في المزامنة', cls: 'error'   },
+};
+
+let _statusTimer = null;
+let _currentStatus = 'loading';
+
+/**
+ * Debounces only 'syncing' status (prevents rapid flicker on writes).
+ * All other statuses apply immediately.
+ */
+function _statusDebounce(status) {
+  if (_statusTimer) { clearTimeout(_statusTimer); _statusTimer = null; }
+
+  if (status === 'syncing') {
+    _statusTimer = setTimeout(() => _applyStatusToUI('syncing'), 350);
+  } else {
+    _applyStatusToUI(status);
   }
 }
 
-// ══════════════════════════════════════════════
-//  DATA
-// ══════════════════════════════════════════════
+function _applyStatusToUI(status) {
+  _currentStatus = status;
+  const pill  = document.getElementById('sync-pill');
+  const label = document.getElementById('sync-label');
+  if (!pill || !label) return;
+
+  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.syncing;
+  pill.className    = `sync-pill ${cfg.cls}`;
+  label.textContent = cfg.label;
+  pill.style.opacity = '1';
+
+  // Auto-fade 'synced' indicator after 4s — confirmed, no need to linger
+  if (status === 'synced') {
+    setTimeout(() => {
+      if (_currentStatus === 'synced') pill.style.opacity = '0.35';
+    }, 4000);
+  }
+}
+
+// Expose internal setter so syncEngine can call it
+function updateStatus(status) { _statusDebounce(status); }
+// Alias for syncEngine internal use
+_applyStatusToUI; // already defined above
+
+
+// ══════════════════════════════════════════════════════════════════
+//  SECTION 6 — NETWORK STATE DETECTION
+// ══════════════════════════════════════════════════════════════════
+
+window.addEventListener('online',  () => _syncEngine.handleOnline());
+window.addEventListener('offline', () => _syncEngine.handleOffline());
+
+// Flush pending writes before page unload to prevent data loss
+window.addEventListener('beforeunload', () => _syncEngine.flushAll());
+
+
+// ══════════════════════════════════════════════════════════════════
+//  SECTION 7 — IN-MEMORY STATE (Single source of truth for UI)
+//  Firestore is the persistent source. This is the working mirror.
+//  Never written to localStorage.
+// ══════════════════════════════════════════════════════════════════
+
+// Flat working state — merged from all Firestore documents
+const S = {
+  checked: {},   // { [cardId]: boolean }
+  notes:   {},   // { [cardId]: string }
+  silDone: {},   // { [dayIndex]: boolean }
+  silExp:  {},   // { [dayIndex]: boolean } — silence day expanded state
+  cExp:    {},   // { [cardId]: boolean }   — content card expanded state
+  prompts: [],   // [{ id, name, text }]
+  links:   [],   // [{ id, title, url }]
+};
+
+/**
+ * Persists specific state slices to Firestore.
+ * Maps state properties to their owning Firestore document.
+ * Uses the sync engine's debounced write queue.
+ * @param {string[]} keys — which state properties changed
+ */
+function _saveSlices(...keys) {
+  // Map state keys → Firestore doc key
+  const DOC_MAP = {
+    checked:  'contentProgress',
+    notes:    'contentProgress',
+    silDone:  'silenceProgress',
+    silExp:   'silenceProgress',
+    cExp:     'uiState',
+    prompts:  'vaultPrompts',
+    links:    'vaultLinks',
+  };
+
+  // Group changed keys by their owning document
+  const docWrites = {};
+  for (const key of keys) {
+    const docKey = DOC_MAP[key];
+    if (!docKey) continue;
+    if (!docWrites[docKey]) docWrites[docKey] = {};
+    docWrites[docKey][key] = S[key];
+  }
+
+  // Queue a write for each affected document
+  for (const [docKey, payload] of Object.entries(docWrites)) {
+    _syncEngine.write(docKey, payload);
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+//  SECTION 8 — SELECTIVE RE-RENDER
+//  Only re-renders the sections that own the updated Firestore doc.
+// ══════════════════════════════════════════════════════════════════
+
+/**
+ * Re-renders only the UI sections affected by a specific Firestore doc.
+ * Avoids full re-renders on every snapshot update.
+ * @param {string} key — which Firestore document just updated
+ */
+function _renderForKey(key) {
+  switch (key) {
+    case 'contentProgress':
+      renderC();
+      break;
+    case 'silenceProgress':
+      renderSil();
+      break;
+    case 'vaultPrompts':
+    case 'vaultLinks':
+      renderVault();
+      break;
+    case 'uiState':
+      renderC(); // cExp state affects content rendering
+      break;
+    default:
+      // Unknown key — do a full render to be safe
+      _renderAll();
+  }
+}
+
+/** Full render — used on boot and reconnect. */
+function _renderAll() {
+  renderC();
+  renderSil();
+  renderHooks();
+  renderVault();
+  updateRing();
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+//  SECTION 9 — DATA CONSTANTS
+// ══════════════════════════════════════════════════════════════════
+
 const HOOKS=[
   {text:"لا أحد يخبر الشخص السمين بهذا عند بدء التمرين.",tags:["relatable","insecurity"]},
   {text:"ضيّعت 3 سنوات وأنا آكل 'صحي' وأزيد في الوزن.",tags:["anger","controversy"]},
@@ -707,15 +1369,15 @@ const PHASES=[
       {id:"P3-09",type:"CAROUSEL",hook:"قبل أن تبدأ تحولاً — اقرأ كل شريحة من هذا أولاً.",emotion:["relatable","aspiration"],script:"الهوك، التحول الذهني، ما تتبعه، العادة الواحدة، كيف تنجو من الأسبوع الثاني، التقدم الحقيقي، الجداول الزمنية، كوتشينغ.",visual:"بطاقات داكنة نظيفة. لهجة برتقالية.",editing:"لا ينطبق. أصل التحويل الأخير.",onScreen:"الدليل الصادق لبدء التحول.",caption:"تمنيت أن يعطيني أحد هذا منذ 3 سنوات. احفظه.",cta:["حفظ","مشاركة","بيع قوي"],goal:"سلطة / مبيعات"},
       {id:"P3-10",type:"REEL",hook:"هذا ما حدث لثقتي بنفسي بعد خسارة [X] كيلو.",emotion:["aspiration","relatable"],script:"يتأمل التغييرات الداخلية. 'الوزن الذي فقدته لم يكن جسدياً فقط.' عاطفي، سينمائي، إنساني.",visual:"يمشي بثقة. أماكن اجتماعية. لحظة المرآة. ابتسامة حقيقية.",editing:"سينمائي عاطفي. بطيء تأملي.",onScreen:"لم يكن الأمر يتعلق بالوزن فقط قط.",caption:"الجانب من التحول الذي لا يتحدث عنه أحد كفاية. من احتاج هذا؟",cta:["تعليق","مشاركة","رسالة"],goal:"عمق عاطفي / تحويلات"},
     ]
-  }
+  },
 ];
 
 const SILENCE_DAYS=[
-  {day:1,title:"المسح الاستراتيجي الكامل",sub:"قراءة وفهم كل النظام",badge:"استراتيجية",
-   tasks:["<strong>اقرأ نظام المحتوى بالكامل</strong> — الـ3 مراحل والـ30 قطعة وكل تفاصيل الإنتاج","<strong>حدد شخصيتك بدقة:</strong> من أنت؟ وزنك؟ قصتك؟ هدفك الرقمي الدقيق؟","<strong>اختر 10 هوك</strong> من المكتبة تشعر أنها تعبّر عنك بأكثر شكل صادق","<strong>التقط صورة 'اليوم الصفر'</strong> من 5 زوايا مختلفة في نفس الإضاءة — هذا ذهبك","<strong>أنشئ ملف تتبع</strong> في نوشن أو شيت — وزن يومي، سعرات، تمارين"],
-   tip:"<strong>قاعدة اليوم الأول:</strong> صورة اليوم الصفر هي أثمن أصول حملتك كلها. كلما كانت أصدق وأقل إخراجاً كلما كانت أقوى في المرحلة الثالثة."},
-  {day:2,title:"كتابة وتحسين السيناريوهات",sub:"مراجعة وصقل كل النصوص",badge:"كتابة",
-   tasks:["<strong>اقرأ كل 10 سيناريوهات المرحلة الأولى</strong> بصوت عالٍ وحدد ما يبدو غير طبيعي","<strong>أعد كتابة الهوك</strong> لكل ريلز بلغتك الشخصية — يجب أن تشعر أنه حقاً أنت","<strong>أنشئ ورقة السيناريوهات:</strong> هوك + نص + نص الشاشة لكل قطعة في صف واحد","<strong>صوّت على كل سيناريو:</strong> هل هذا يبدو حقيقياً؟ هل سأشعر بالراحة بتصويره؟","احفظ البرومبت الذي استخدمته في توليد السيناريوهات في خزنة النظام"],
+  {day:1,title:"التخطيط الاستراتيجي الكامل",sub:"من الفكرة إلى النظام",badge:"تخطيط",
+   tasks:["<strong>اقرأ نظام المحتوى الكامل</strong> من البداية للنهاية — فهم الصورة الكبيرة أولاً","<strong>اكتب هدفك الرئيسي</strong> للـ100 يوم — رقم متابعين واضح، وهدف تحويل واضح","<strong>أنشئ ملف تتبع</strong> (Notion, Excel, ورقة) — كل قطعة، حالتها، تاريخ نشرها","<strong>حدد مواقع التصوير</strong> الثلاثة الرئيسية — الصالة، المنزل، الخارج","<strong>جهّز قائمة الأدوات</strong> — تطبيق مونتاج، تطبيق تتبع سعرات، تطبيق جدولة"],
+   tip:"<strong>قاعدة اليوم 1:</strong> لا تبدأ التصوير اليوم. اليوم لتنظيم الرأس، ليس الكاميرا. المنشئون الذين يخططون جيداً ينتجون ضعف من لا يخططون."},
+  {day:2,title:"كتابة السيناريو الكامل",sub:"30 قطعة مكتوبة بالكامل",badge:"كتابة",
+   tasks:["<strong>اكتب سيناريو كل ريلز</strong> في 3–5 جمل تنفيذية — ماذا تقول، بالضبط، من الثانية الأولى","<strong>اكتب الهوك الافتتاحي</strong> لكل قطعة — يجب أن يكون مختلفاً عن العنوان المكتوب في النظام","<strong>اكتب الكابشن الكامل</strong> لكل منشور — احفظه في ملف منفصل جاهز للنسخ واللصق","<strong>راجع كل هوك</strong> — هل يخلق فضولاً؟ هل يُسبّب ألماً؟ هل يوعد بحل؟","<strong>احذف أي هوك</strong> لا يشدك أنت — إن لم تشعر بالرغبة في المشاهدة، لن يشاهده أحد"],
    tip:"<strong>قاعدة السيناريو الجيد:</strong> إن لم تستطع قراءته بصوت عالٍ بشكل طبيعي — أعد كتابته. المشاهد يشعر بالاصطناعية فوراً."},
   {day:3,title:"اختبار الزوايا والإضاءة",sub:"تجارب التصوير قبل البدء الفعلي",badge:"تصوير",
    tasks:["<strong>جرّب 3 إضاءات مختلفة</strong> في مواقع التصوير المحتملة (صالة، منزل، خارج)","<strong>اختبر 5 زوايا كاميرا</strong> لفيديو الكلام المباشر — أيها يبدو أكثر سلطة وأصالة؟","<strong>سجّل 30 ثانية اختبار</strong> لأول ريلز وشاهده مع صوت ثم بدونه","<strong>اختر موسيقى الخلفية</strong> لكل نوع محتوى — ابحث في TikTok Creative Center","<strong>جهّز حقيبة التصوير:</strong> حامل، إضاءة، ميكروفون، هاتف بشحن كامل"],
@@ -730,7 +1392,7 @@ const SILENCE_DAYS=[
    tasks:["<strong>صوّر كل ريلزات المرحلة 2</strong> — المقابلات في الصالة، الكارديو، الهضبة، الذكاء الاصطناعي","<strong>التقط صور 'تحديث اليوم 30'</strong> — استخدم نفس إضاءة وزاوية اليوم الصفر","<strong>صمّم كاروسيلات المرحلة 2:</strong> البرنامج التدريبي + الأساطير العشرة","<strong>صوّر ستوري يوم الأكل الكامل</strong> — يتطلب تصوير طوال يوم حقيقي","<strong>صوّر محتوى 'سألت 10 أشخاص'</strong> — اذهب للصالة بميكروفون غير رسمي"],
    tip:"<strong>قاعدة المقابلات:</strong> اسأل أسئلة بسيطة وودية. لا تطلب مراجعات. ردود الفعل الطبيعية التلقائية هي كل شيء."},
   {day:7,title:"المونتاج الكامل — الدفعة الأولى",sub:"تعديل ريلزات المرحلة 1",badge:"مونتاج",
-   tasks:["<strong>عدّل الـ10 ريلزات الأولى</strong> — ترجمة + موسيقى + نص الشاشة + تدرج الألوان","<strong>طبّق قواعد المونتاج:</strong> لا موسيقى أول ثانيتين، ترجمة دائماً، نص كلمة كلمة","<strong>اختر صور المصغّرة</strong> لكل ريلز — اللحظة الأكثر توتراً أو عاطفة","<strong>راجع كل ريلز بدون صوت</strong> — هل الرسالة واضحة بالنص فقط؟","<strong>أنشئ مجلداً منظماً:</strong> خام / جاري المونتاج / جاهز للنشر"],
+   tasks:["<strong>عدّل الـ10 ريلزات الأولى</strong> — ترجمة + موسيقى + نص الشاشة + تدرج الألوان","<strong>طبّق قواعد المونتاج:</strong> لا موسيقى أول ثانيتين، ترجمة دائماً، نص كلمة كلمة","<strong>اختر صور المصغّرات</strong> لكل ريلز — اللحظة الأكثر توتراً أو عاطفة","<strong>راجع كل ريلز بدون صوت</strong> — هل الرسالة واضحة بالنص فقط؟","<strong>أنشئ مجلداً منظماً:</strong> خام / جاري المونتاج / جاهز للنشر"],
    tip:"<strong>قاعدة الـ3 ثوانٍ:</strong> إن لم يكن الـ3 ثوانٍ الأولى مشدودة بصرياً — أعد المونتاج. لا نقاش."},
   {day:8,title:"المونتاج الكامل — الدفعة الثانية",sub:"تعديل ريلزات المرحلة 2 و3",badge:"مونتاج",
    tasks:["<strong>عدّل الـ10 ريلزات الثانية</strong> — نفس معايير المرحلة الأولى","<strong>عدّل محتوى المرحلة 3:</strong> قبل/بعد وكشف البيانات وعرض المنتج","<strong>صنع طبقات الكشف البياني</strong> لمحتوى البيانات والمقارنات","<strong>جهّز كاروسيلات المرحلة 3</strong> — النظام الكامل وما قبل التحول","<strong>راجع الجودة:</strong> صوت نظيف + صورة واضحة + ترجمة صحيحة في كل قطعة"],
@@ -743,125 +1405,132 @@ const SILENCE_DAYS=[
    tip:"<strong>قاعدة الإطلاق:</strong> اليوم 11 هو يوم النشر الأول. لا تؤخر. لا تستظرف. المحتوى جاهز والنظام يعمل. الآن دورك فقط الضغط على نشر."},
 ];
 
-// ══════════════════════════════════════════════
-//  STATE  (Firestore is the only source of truth)
-// ══════════════════════════════════════════════
-let ph=0, filt='ALL';
 
-// In-memory mirror of Firestore document — NEVER written to localStorage.
-const S={checked:{},notes:{},silDone:{},silExp:{},cExp:{},prompts:[],links:[]};
+// ══════════════════════════════════════════════════════════════════
+//  SECTION 10 — UI STATE & TABS
+// ══════════════════════════════════════════════════════════════════
 
-/** Persist the current in-memory state to Firestore. */
-function saveState(){
-  saveUserData({ ...S }).catch(err =>
-    console.error("[saveState] Firestore write failed:", err)
-  );
-}
+let ph = 0;   // current phase index (0, 1, 2)
+let filt = 'ALL'; // current content filter
 
-/**
- * _onRemoteDataChange(data)
- * Called by the onSnapshot listener whenever Firestore data changes.
- * Merges remote data into S and re-renders all UI components.
- */
-function _onRemoteDataChange(data) {
-  Object.assign(S, data);
-  renderC();
-  renderSil();
-  renderHooks();
-  renderVault();
-  updateRing();
-}
+const TABS = ['content','silence','hooks','strategy','vault'];
 
-/** Show a loading overlay until Firebase is ready. */
-function _showLoader(msg) {
-  let el = document.getElementById('__fb-loader');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = '__fb-loader';
-    el.style.cssText = [
-      'position:fixed','inset:0','z-index:9999',
-      'background:var(--bg)','display:flex','flex-direction:column',
-      'align-items:center','justify-content:center','gap:14px'
-    ].join(';');
-    el.innerHTML = `
-      <svg width="42" height="42" viewBox="0 0 42 42" style="animation:fb-spin 1s linear infinite">
-        <circle cx="21" cy="21" r="17" fill="none" stroke="var(--or)" stroke-width="3.5"
-          stroke-dasharray="80" stroke-dashoffset="50" stroke-linecap="round"/>
-      </svg>
-      <div id="__fb-loader-msg" style="font-size:12px;color:var(--mu);font-family:'Cairo',sans-serif"></div>
-      <style>@keyframes fb-spin{to{transform:rotate(360deg)}}</style>`;
-    document.body.appendChild(el);
-  }
-  document.getElementById('__fb-loader-msg').textContent = msg || '';
-}
-
-function _hideLoader() {
-  const el = document.getElementById('__fb-loader');
-  if (el) el.remove();
-}
-
-// ══════════════════════════════════════════════
-//  TABS
-// ══════════════════════════════════════════════
-const TABS=['content','silence','hooks','strategy','vault'];
-function ST(t){
-  document.querySelectorAll('.tc').forEach(el=>el.classList.remove('on'));
-  document.querySelectorAll('.mt').forEach(el=>el.classList.remove('on'));
-  document.getElementById('tc-'+t).classList.add('on');
+function ST(t) {
+  document.querySelectorAll('.tc').forEach(el => el.classList.remove('on'));
+  document.querySelectorAll('.mt').forEach(el => el.classList.remove('on'));
+  document.getElementById('tc-' + t).classList.add('on');
   document.querySelectorAll('.mt')[TABS.indexOf(t)].classList.add('on');
 }
 
-// ══════════════════════════════════════════════
-//  HELPERS
-// ══════════════════════════════════════════════
-const TCL=e=>({anger:'t-anger',relatable:'t-relatable',controversy:'t-controversy',
-  aspiration:'t-aspiration',insecurity:'t-insecurity',curiosity:'t-curiosity',humor:'t-humor'}[e]||'t-curiosity');
-const TLC=e=>({anger:'غضب',relatable:'انتماء',controversy:'جدل',aspiration:'طموح',
-  insecurity:'قلق',curiosity:'فضول',humor:'فكاهة'}[e]||e);
-const TYPC=t=>({REEL:'reel',CAROUSEL:'carousel',STORY:'story'}[t]||'');
-const TYPL=t=>({REEL:'ريلز',CAROUSEL:'كاروسيل',STORY:'ستوري'}[t]||t);
-const totalC=()=>PHASES.reduce((a,p)=>a+p.cards.length,0);
-const totalD=()=>Object.values(S.checked).filter(Boolean).length;
 
-function updateRing(){
-  const tot=totalC(),done=totalD();
-  const c=2*Math.PI*27;
-  document.getElementById('rpath').style.strokeDashoffset=c-(done/tot)*c;
-  document.getElementById('rval').textContent=done;
-  const all=PHASES.flatMap(p=>p.cards);
-  document.getElementById('sr').textContent=all.filter(c=>c.type==='REEL').length;
-  document.getElementById('sc2').textContent=all.filter(c=>c.type==='CAROUSEL').length;
-  document.getElementById('ss').textContent=all.filter(c=>c.type==='STORY').length;
-  document.getElementById('sd').innerHTML=`${done}<small>/${tot}</small>`;
-  document.getElementById('sl').textContent=tot-done;
+// ══════════════════════════════════════════════════════════════════
+//  SECTION 11 — RENDER HELPERS
+// ══════════════════════════════════════════════════════════════════
+
+const TCL = e => ({
+  anger:'t-anger', relatable:'t-relatable', controversy:'t-controversy',
+  aspiration:'t-aspiration', insecurity:'t-insecurity', curiosity:'t-curiosity', humor:'t-humor'
+}[e] || 't-curiosity');
+
+const TLC = e => ({
+  anger:'غضب', relatable:'انتماء', controversy:'جدل', aspiration:'طموح',
+  insecurity:'قلق', curiosity:'فضول', humor:'فكاهة'
+}[e] || e);
+
+const TYPC = t => ({ REEL:'reel', CAROUSEL:'carousel', STORY:'story' }[t] || '');
+const TYPL = t => ({ REEL:'ريلز', CAROUSEL:'كاروسيل', STORY:'ستوري' }[t] || t);
+
+const totalC = () => PHASES.reduce((a, p) => a + p.cards.length, 0);
+const totalD = () => Object.values(S.checked).filter(Boolean).length;
+
+function updateRing() {
+  const tot = totalC(), done = totalD();
+  const c = 2 * Math.PI * 27;
+  document.getElementById('rpath').style.strokeDashoffset = c - (done / tot) * c;
+  document.getElementById('rval').textContent = done;
+  const all = PHASES.flatMap(p => p.cards);
+  document.getElementById('sr').textContent  = all.filter(c => c.type === 'REEL').length;
+  document.getElementById('sc2').textContent = all.filter(c => c.type === 'CAROUSEL').length;
+  document.getElementById('ss').textContent  = all.filter(c => c.type === 'STORY').length;
+  document.getElementById('sd').innerHTML    = `${done}<small>/${tot}</small>`;
+  document.getElementById('sl').textContent  = tot - done;
 }
 
-// ══════════════════════════════════════════════
-//  CONTENT TAB
-// ══════════════════════════════════════════════
-function toggleDone(e,id){e.stopPropagation();S.checked[id]=!S.checked[id];saveState();renderC();updateRing();}
-function togExp(e,id){e.stopPropagation();S.cExp[id]=!S.cExp[id];renderC();}
-function saveNote(id,v){S.notes[id]=v;saveState();}
-function SF(e,f){filt=f;document.querySelectorAll('.fchip').forEach(c=>c.classList.remove('on'));e.target.classList.add('on');renderC();}
-function SP(i){ph=i;document.querySelectorAll('.ptab').forEach((t,j)=>t.classList.toggle('on',j===i));renderC();}
 
-function renderC(){
-  const p=PHASES[ph];
-  const done=p.cards.filter(c=>S.checked[c.id]).length;
-  const items=p.cards.map(c=>{
-    const isDone=!!S.checked[c.id],isOpen=!!S.cExp[c.id],note=S.notes[c.id]||'';
-    let show=true;
-    if(filt==='REEL'&&c.type!=='REEL')show=false;
-    if(filt==='CAROUSEL'&&c.type!=='CAROUSEL')show=false;
-    if(filt==='STORY'&&c.type!=='STORY')show=false;
-    if(filt==='done'&&!isDone)show=false;
-    if(filt==='todo'&&isDone)show=false;
-    const tags=c.emotion.map(e=>`<span class="tag ${TCL(e)}">${TLC(e)}</span>`).join('');
-    const ctas=c.cta.map(t=>`<span class="ctap">${t}</span>`).join('');
-    return `<div class="iw${show?'':' hide'}">
-      <div class="item${isDone?' done':''}${isOpen?' xpd':''}">
+// ══════════════════════════════════════════════════════════════════
+//  SECTION 12 — CONTENT TAB
+// ══════════════════════════════════════════════════════════════════
+
+/**
+ * toggleDone — marks/unmarks a content card as done.
+ * Writes only the 'checked' field to contentProgress doc.
+ */
+function toggleDone(e, id) {
+  e.stopPropagation();
+  S.checked[id] = !S.checked[id];
+  _saveSlices('checked');
+  renderC();
+  updateRing();
+}
+
+/**
+ * togExp — expands/collapses a content card detail panel.
+ * Writes only the 'cExp' field to uiState doc.
+ */
+function togExp(e, id) {
+  e.stopPropagation();
+  S.cExp[id] = !S.cExp[id];
+  _saveSlices('cExp');
+  renderC();
+}
+
+/**
+ * saveNote — debounced note save for a content card.
+ * Writes only the 'notes' field to contentProgress doc.
+ */
+function saveNote(id, v) {
+  S.notes[id] = v;
+  _saveSlices('notes');
+}
+
+/** SF — set filter chip */
+function SF(e, f) {
+  filt = f;
+  document.querySelectorAll('.fchip').forEach(c => c.classList.remove('on'));
+  e.target.classList.add('on');
+  renderC();
+}
+
+/** SP — set phase tab */
+function SP(i) {
+  ph = i;
+  document.querySelectorAll('.ptab').forEach((t, j) => t.classList.toggle('on', j === i));
+  renderC();
+}
+
+function renderC() {
+  const p = PHASES[ph];
+  const done = p.cards.filter(c => S.checked[c.id]).length;
+
+  const items = p.cards.map(c => {
+    const isDone = !!S.checked[c.id];
+    const isOpen = !!S.cExp[c.id];
+    const note   = S.notes[c.id] || '';
+
+    let show = true;
+    if (filt === 'REEL'     && c.type !== 'REEL')     show = false;
+    if (filt === 'CAROUSEL' && c.type !== 'CAROUSEL') show = false;
+    if (filt === 'STORY'    && c.type !== 'STORY')     show = false;
+    if (filt === 'done'     && !isDone)                show = false;
+    if (filt === 'todo'     &&  isDone)                show = false;
+
+    const tags = c.emotion.map(e => `<span class="tag ${TCL(e)}">${TLC(e)}</span>`).join('');
+    const ctas = c.cta.map(t => `<span class="ctap">${t}</span>`).join('');
+
+    return `<div class="iw${show ? '' : ' hide'}">
+      <div class="item${isDone ? ' done' : ''}${isOpen ? ' xpd' : ''}">
         <div class="irow">
-          <div class="chk${isDone?' on':''}" onclick="toggleDone(event,'${c.id}')">
+          <div class="chk${isDone ? ' on' : ''}" onclick="toggleDone(event,'${c.id}')">
             <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l2.8 2.8L9 1" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
           <div class="imain">
@@ -872,11 +1541,11 @@ function renderC(){
             <div class="ihook">${c.hook}</div>
             <div class="itags">${tags}</div>
           </div>
-          <div class="ichev${isOpen?' on':''}" onclick="togExp(event,'${c.id}')">
+          <div class="ichev${isOpen ? ' on' : ''}" onclick="togExp(event,'${c.id}')">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4.5l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
         </div>
-        <div class="idet${isOpen?' on':''}">
+        <div class="idet${isOpen ? ' on' : ''}">
           <div class="nota-lbl">ملاحظاتك</div>
           <textarea class="nota" placeholder="تاريخ التصوير، الحالة، أفكار..." oninput="saveNote('${c.id}',this.value)">${note}</textarea>
           <div class="dgrid">
@@ -893,7 +1562,7 @@ function renderC(){
     </div>`;
   }).join('');
 
-  document.getElementById('cmain').innerHTML=`
+  document.getElementById('cmain').innerHTML = `
     <div class="pbanner">
       <div class="pstripe"></div>
       <div class="pbody">
@@ -905,7 +1574,7 @@ function renderC(){
     </div>
     <div class="pills">
       <div class="slbl">تركيز الركيزة — هذه المرحلة</div>
-      <div class="pgrid">${p.pillars.map(pi=>`
+      <div class="pgrid">${p.pillars.map(pi => `
         <div class="prow"><span class="prow-n">${pi.l}</span>
         <div class="prow-t"><div class="prow-f" style="width:${pi.p}%"></div></div>
         <span class="prow-p">${pi.p}%</span></div>`).join('')}</div>
@@ -917,38 +1586,51 @@ function renderC(){
     ${items}`;
 }
 
-// ══════════════════════════════════════════════
-//  SILENCE TAB
-// ══════════════════════════════════════════════
-function togSilDay(i){S.silExp[i]=!S.silExp[i];renderSil();}
-function chkSilDay(e,i){e.stopPropagation();S.silDone[i]=!S.silDone[i];saveState();renderSil();}
 
-function renderSil(){
-  const done=Object.values(S.silDone).filter(Boolean).length;
-  document.getElementById('sil-done-lbl').textContent=`${done} / 10 مكتمل`;
-  document.getElementById('sdays').innerHTML=SILENCE_DAYS.map((d,i)=>{
-    const isOpen=!!S.silExp[i],isDone=!!S.silDone[i];
-    const tasks=d.tasks.map(t=>`<div class="sdi-task">${t}</div>`).join('');
-    return `<div class="sday${isDone?' done-s':''}">
+// ══════════════════════════════════════════════════════════════════
+//  SECTION 13 — SILENCE TAB
+// ══════════════════════════════════════════════════════════════════
+
+function togSilDay(i) {
+  S.silExp[i] = !S.silExp[i];
+  _saveSlices('silExp');
+  renderSil();
+}
+
+function chkSilDay(e, i) {
+  e.stopPropagation();
+  S.silDone[i] = !S.silDone[i];
+  _saveSlices('silDone');
+  renderSil();
+}
+
+function renderSil() {
+  const done = Object.values(S.silDone).filter(Boolean).length;
+  document.getElementById('sil-done-lbl').textContent = `${done} / 10 مكتمل`;
+  document.getElementById('sdays').innerHTML = SILENCE_DAYS.map((d, i) => {
+    const isOpen = !!S.silExp[i];
+    const isDone = !!S.silDone[i];
+    const tasks  = d.tasks.map(t => `<div class="sdi-task">${t}</div>`).join('');
+    return `<div class="sday${isDone ? ' done-s' : ''}">
       <div class="sday-hdr" onclick="togSilDay(${i})">
         <div class="sday-num"><span>يوم</span>${d.day}</div>
         <div class="sday-wrap">
           <div><div class="sday-ttl">${d.title}</div><div class="sday-sub">${d.sub}</div></div>
           <div style="display:flex;align-items:center;gap:7px;flex-shrink:0">
             <span class="sday-badge">${d.badge}</span>
-            <div class="sday-chev${isOpen?' on':''}">
+            <div class="sday-chev${isOpen ? ' on' : ''}">
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4.5l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </div>
           </div>
         </div>
       </div>
-      <div class="sday-body${isOpen?' on':''}">
+      <div class="sday-body${isOpen ? ' on' : ''}">
         <div class="sday-inner">
           <div><div class="sdi-lbl">مهام الإنتاج</div>${tasks}</div>
           <div><div class="sdi-lbl">نصيحة اليوم</div><div class="sdi-tip">${d.tip}</div></div>
         </div>
         <div class="sday-chkrow">
-          <div class="pchk${isDone?' on':''}" onclick="chkSilDay(event,${i})">
+          <div class="pchk${isDone ? ' on' : ''}" onclick="chkSilDay(event,${i})">
             <svg width="9" height="7" viewBox="0 0 9 7" fill="none"><path d="M1 3.5l2.5 2.5L8 1" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
           <div class="pchk-lbl" onclick="chkSilDay(event,${i})">أكملت مهام هذا اليوم</div>
@@ -958,108 +1640,168 @@ function renderSil(){
   }).join('');
 }
 
-// ══════════════════════════════════════════════
-//  HOOKS TAB
-// ══════════════════════════════════════════════
-function renderHooks(){
-  document.getElementById('hgrid').innerHTML=HOOKS.map(h=>{
-    const tags=h.tags.map(t=>`<span class="tag ${TCL(t)}">${TLC(t)}</span>`).join('');
+
+// ══════════════════════════════════════════════════════════════════
+//  SECTION 14 — HOOKS TAB
+// ══════════════════════════════════════════════════════════════════
+
+function renderHooks() {
+  document.getElementById('hgrid').innerHTML = HOOKS.map(h => {
+    const tags = h.tags.map(t => `<span class="tag ${TCL(t)}">${TLC(t)}</span>`).join('');
     return `<div class="hk"><div class="hk-tx">"${h.text}"</div><div class="hk-tg">${tags}</div></div>`;
   }).join('');
 }
 
-// ══════════════════════════════════════════════
-//  VAULT TAB
-// ══════════════════════════════════════════════
-function togVF(id){const el=document.getElementById(id);el.classList.toggle('on');}
 
-function savePrompt(name,text){
-  S.prompts.push({id:Date.now(),name,text});saveState();renderVault();
+// ══════════════════════════════════════════════════════════════════
+//  SECTION 15 — VAULT TAB
+// ══════════════════════════════════════════════════════════════════
+
+function togVF(id) {
+  const el = document.getElementById(id);
+  el.classList.toggle('on');
 }
-function saveLink(title,url){
-  S.links.push({id:Date.now(),title,url});saveState();renderVault();
-}
-function addPrompt(){
-  const n=document.getElementById('p-name').value.trim();
-  const b=document.getElementById('p-body').value.trim();
-  if(!n||!b)return;
-  savePrompt(n,b);
-  document.getElementById('p-name').value='';
-  document.getElementById('p-body').value='';
+
+/**
+ * addPrompt — adds a new vault prompt.
+ * Writes only the 'prompts' array to vaultPrompts doc.
+ */
+function addPrompt() {
+  const n = document.getElementById('p-name').value.trim();
+  const b = document.getElementById('p-body').value.trim();
+  if (!n || !b) return;
+
+  S.prompts.push({ id: Date.now(), name: n, text: b });
+  _saveSlices('prompts');
+  renderVault();
+
+  document.getElementById('p-name').value = '';
+  document.getElementById('p-body').value = '';
   document.getElementById('pf').classList.remove('on');
 }
-function addLink(){
-  const t=document.getElementById('l-title').value.trim();
-  const u=document.getElementById('l-url').value.trim();
-  if(!t||!u)return;
-  saveLink(t,u);
-  document.getElementById('l-title').value='';
-  document.getElementById('l-url').value='';
+
+/**
+ * addLink — adds a new vault link.
+ * Writes only the 'links' array to vaultLinks doc.
+ */
+function addLink() {
+  const t = document.getElementById('l-title').value.trim();
+  const u = document.getElementById('l-url').value.trim();
+  if (!t || !u) return;
+
+  S.links.push({ id: Date.now(), title: t, url: u });
+  _saveSlices('links');
+  renderVault();
+
+  document.getElementById('l-title').value = '';
+  document.getElementById('l-url').value   = '';
   document.getElementById('lf').classList.remove('on');
 }
-function delPrompt(id){S.prompts=S.prompts.filter(p=>p.id!==id);saveState();renderVault();}
-function delLink(id){S.links=S.links.filter(l=>l.id!==id);saveState();renderVault();}
 
-function renderVault(){
-  const pl=document.getElementById('plist');
-  pl.innerHTML=S.prompts.length?S.prompts.map(p=>`
-    <div class="vitem">
-      <div class="vdel" onclick="delPrompt(${p.id})">✕</div>
-      <div class="vitem-ttl">${p.name}</div>
-      <div class="vitem-body">${p.text}</div>
-    </div>`).join(''):'<div class="vempty">لا توجد برومبت محفوظة بعد</div>';
-
-  const ll=document.getElementById('llist');
-  ll.innerHTML=S.links.length?S.links.map(l=>`
-    <div class="vitem">
-      <div class="vdel" onclick="delLink(${l.id})">✕</div>
-      <div class="vitem-ttl">${l.title}</div>
-      <a class="vitem-link" href="${l.url}" target="_blank" rel="noopener">${l.url}</a>
-    </div>`).join(''):'<div class="vempty">لا توجد روابط محفوظة بعد</div>';
+function delPrompt(id) {
+  S.prompts = S.prompts.filter(p => p.id !== id);
+  _saveSlices('prompts');
+  renderVault();
 }
 
-// ══════════════════════════════════════════════
-//  RESET
-// ══════════════════════════════════════════════
-function resetAll(){
-  if(!confirm('إعادة تعيين جميع البيانات؟ لا يمكن التراجع.'))return;
-  const blank={checked:{},notes:{},silDone:{},silExp:{},cExp:{},prompts:[],links:[]};
-  Object.assign(S, blank);
-  saveState();   // writes blank state to Firestore; onSnapshot will re-render
+function delLink(id) {
+  S.links = S.links.filter(l => l.id !== id);
+  _saveSlices('links');
+  renderVault();
 }
 
-// ══════════════════════════════════════════════
-//  INIT
-// ══════════════════════════════════════════════
-// ══════════════════════════════════════════════
-//  EXPOSE GLOBALS (required — type="module" scopes everything)
-// ══════════════════════════════════════════════
+function renderVault() {
+  const pl = document.getElementById('plist');
+  pl.innerHTML = S.prompts.length
+    ? S.prompts.map(p => `
+      <div class="vitem">
+        <div class="vdel" onclick="delPrompt(${p.id})">✕</div>
+        <div class="vitem-ttl">${p.name}</div>
+        <div class="vitem-body">${p.text}</div>
+      </div>`).join('')
+    : '<div class="vempty">لا توجد برومبت محفوظة بعد</div>';
+
+  const ll = document.getElementById('llist');
+  ll.innerHTML = S.links.length
+    ? S.links.map(l => `
+      <div class="vitem">
+        <div class="vdel" onclick="delLink(${l.id})">✕</div>
+        <div class="vitem-ttl">${l.title}</div>
+        <a class="vitem-link" href="${l.url}" target="_blank" rel="noopener">${l.url}</a>
+      </div>`).join('')
+    : '<div class="vempty">لا توجد روابط محفوظة بعد</div>';
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+//  SECTION 16 — RESET
+// ══════════════════════════════════════════════════════════════════
+
+/**
+ * resetAll — clears all user data.
+ * Writes blank payloads to all Firestore documents.
+ * Confirmed by user before executing.
+ */
+async function resetAll() {
+  if (!confirm('إعادة تعيين جميع البيانات؟ لا يمكن التراجع.')) return;
+
+  const blanks = _blankDocs();
+
+  // Reset in-memory state
+  Object.assign(S, {
+    checked: {}, notes: {}, silDone: {}, silExp: {}, cExp: {}, prompts: [], links: []
+  });
+
+  // Write blank state to all Firestore docs
+  const uid = _syncEngine.getUid();
+  if (uid) {
+    const refs = _getRefs(uid);
+    await Promise.allSettled(
+      Object.entries(blanks).map(([key, data]) =>
+        setDoc(refs[key], { ...data, _resetAt: serverTimestamp(), _uid: uid }, { merge: false })
+          .catch(err => console.error(`[Reset] Failed for ${key}:`, err.message))
+      )
+    );
+  }
+
+  _renderAll();
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+//  SECTION 17 — GLOBAL EXPOSURE
+//  type="module" scopes everything. Expose only what HTML calls.
+// ══════════════════════════════════════════════════════════════════
+
 Object.assign(window, {
+  // Tab navigation
   ST, SP, SF,
+  // Content tab
   toggleDone, togExp, saveNote,
+  // Silence tab
   togSilDay, chkSilDay,
+  // Hooks tab
   renderHooks,
+  // Vault tab
   togVF, addPrompt, addLink, delPrompt, delLink,
+  // Global reset
   resetAll,
 });
 
-// ══════════════════════════════════════════════
-//  INIT — Firebase-first boot sequence
-// ══════════════════════════════════════════════
-(async () => {
-  _showLoader('جارٍ الاتصال...');
-  try {
-    await initFirebase();
-    // onSnapshot in initFirebase will fire _onRemoteDataChange which renders everything.
-    // Fallback: if the snapshot hasn't fired yet render from empty S.
-  } catch (err) {
-    console.error("[Boot] Firebase init failed:", err);
-    // Graceful degradation: render with empty state so UI is still usable.
-    renderC(); renderSil(); renderHooks(); renderVault(); updateRing();
-  } finally {
-    _hideLoader();
-  }
-})();
+
+// ══════════════════════════════════════════════════════════════════
+//  SECTION 18 — BOOT SEQUENCE
+//  1. Render UI immediately with empty state (zero blocking, instant visible)
+//  2. Start Firebase boot in background
+// ══════════════════════════════════════════════════════════════════
+
+// Step 1 — Immediate render with blank state
+// UI is visible instantly. Firebase fills in data asynchronously.
+_renderAll();
+
+// Step 2 — Boot Firebase in background
+// Non-blocking. onSnapshot will trigger re-renders when data arrives.
+_syncEngine.boot();
 </script>
 </body>
 </html>
