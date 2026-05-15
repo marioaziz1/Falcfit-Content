@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام المحتوى — 100 يوم لياقة</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080809;--s1:#0f0f11;--s2:#161618;--s3:#1e1e21;--s4:#262629;
+  --b:rgba(255,255,255,0.055);--bh:rgba(255,255,255,0.11);
+  --tx:#ece8e1;--mu:#706d66;--hi:#3a3835;
+  --or:#e8622a;--or-d:rgba(232,98,42,0.10);--or-b:rgba(232,98,42,0.28);--or-g:rgba(232,98,42,0.18);
+  --gn:#22aa58;--gn-d:rgba(34,170,88,0.09);--gn-b:rgba(34,170,88,0.26);
+  --bl:#3480d4;--bl-d:rgba(52,128,212,0.09);--bl-b:rgba(52,128,212,0.26);
+  --am:#c08a0a;--am-d:rgba(192,138,10,0.09);--am-b:rgba(192,138,10,0.26);
+  --pu:#8050dc;--pu-d:rgba(128,80,220,0.09);--pu-b:rgba(128,80,220,0.26);
+  --rd:#c03858;--rd-d:rgba(192,56,88,0.12);
+  --yl:#c8a010;--yl-d:rgba(200,160,16,0.12);--yl-b:rgba(200,160,16,0.30);
+  --r:9px;
+}
+html{font-size:15px;scroll-behavior:smooth}
+body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--tx);min-height:100vh;line-height:1.7;direction:rtl}
+.wrap{max-width:1180px;margin:0 auto;padding:0 1.5rem}
+
+/* ══ HEADER ══ */
+.hdr{padding:2.5rem 0 2rem;display:flex;align-items:flex-start;justify-content:space-between;gap:1.5rem;flex-wrap:wrap;border-bottom:.5px solid var(--b)}
+.hdr-l{}
+.hdr-eye{font-size:10px;color:var(--or);letter-spacing:.16em;text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:9px;font-weight:600}
+.hdr-eye::after{content:'';width:22px;height:1px;background:var(--or)}
+.hdr-ttl{font-size:clamp(28px,4.5vw,50px);font-weight:900;line-height:1.08;letter-spacing:-.015em}
+.hdr-ttl em{color:var(--or);font-style:normal}
+.hdr-sub{margin-top:10px;font-size:12px;color:var(--mu);line-height:2}
+.hdr-r{display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0}
+.ring-num{font-size:28px;font-weight:900;color:var(--or);line-height:1}
+.ring-lbl{font-size:10px;color:var(--mu);text-align:center;line-height:1.5}
+.ring-svg{transform:rotate(-90deg)}
+
+/* ══ SYNC STATUS INDICATOR ══ */
+.sync-pill{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:4px 10px 4px 8px;border-radius:100px;
+  font-size:10px;font-weight:700;font-family:'Cairo',sans-serif;
+  border:.5px solid transparent;
+  transition:background .3s,color .3s,border-color .3s,opacity .3s;
+  cursor:default;user-select:none;letter-spacing:.03em;
+  /* sits below the ring */
+  margin-top:8px;
+}
+.sync-dot{
+  width:6px;height:6px;border-radius:50%;flex-shrink:0;
+  transition:background .3s;
+}
+
+/* syncing — yellow, pulsing dot */
+.sync-pill.syncing{
+  color:#c8a010;border-color:rgba(200,160,16,0.30);
+  background:rgba(200,160,16,0.10);
+}
+.sync-pill.syncing .sync-dot{
+  background:#c8a010;
+  animation:sync-pulse 1s ease-in-out infinite;
+}
+@keyframes sync-pulse{
+  0%,100%{opacity:1;transform:scale(1)}
+  50%{opacity:.35;transform:scale(.75)}
+}
+
+/* synced — green */
+.sync-pill.synced{
+  color:#22aa58;border-color:rgba(34,170,88,0.26);
+  background:rgba(34,170,88,0.08);
+}
+.sync-pill.synced .sync-dot{background:#22aa58}
+
+/* offline — orange */
+.sync-pill.offline{
+  color:#e8622a;border-color:rgba(232,98,42,0.28);
+  background:rgba(232,98,42,0.10);
+}
+.sync-pill.offline .sync-dot{background:#e8622a}
+
+/* error — red */
+.sync-pill.error{
+  color:#c03858;border-color:rgba(192,56,88,0.28);
+  background:rgba(192,56,88,0.10);
+}
+.sync-pill.error .sync-dot{background:#c03858}
+
+/* ══ MAIN TABS ══ */
+.mtabs{display:flex;border-bottom:.5px solid var(--b);overflow-x:auto;scrollbar-width:none}
+.mtabs::-webkit-scrollbar{display:none}
+.mt{padding:13px 22px;font-size:13px;font-weight:700;cursor:pointer;color:var(--mu);border-bottom:2px solid transparent;transition:all .18s;white-space:nowrap;user-select:none;font-family:'Cairo',sans-serif}
+.mt:hover{color:var(--tx)}
+.mt.on{color:var(--or);border-bottom-color:var(--or)}
+.mt.silence-tab{color:var(--yl)!important}
+.mt.silence-tab.on{border-bottom-color:var(--yl)!important}
+
+/* ══ TAB CONTENT ══ */
+.tc{display:none;padding:1.75rem 0}
+.tc.on{display:block}
+
+/* ══ PHASE NAV ══ */
+.pnav{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:1.5rem}
+.ptabs{display:flex;gap:5px;flex-wrap:wrap}
+.ptab{padding:8px 18px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;border:.5px solid var(--b);background:transparent;color:var(--mu);transition:all .18s;font-family:'Cairo',sans-serif}
+.ptab:hover{border-color:var(--bh);color:var(--tx)}
+.ptab.on{background:var(--or);color:#fff;border-color:var(--or);box-shadow:0 0 16px var(--or-g)}
+
+.fbar{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.flbl{font-size:10px;color:var(--hi);margin-left:3px;font-weight:700}
+.fchip{padding:5px 11px;border-radius:100px;font-size:10px;cursor:pointer;border:.5px solid var(--b);background:transparent;color:var(--mu);font-family:'Cairo',sans-serif;transition:all .18s;user-select:none;font-weight:700}
+.fchip:hover{border-color:var(--bh);color:var(--tx)}
+.fchip.on{border-color:var(--or-b);background:var(--or-d);color:var(--or)}
+
+/* ══ PHASE BANNER ══ */
+.pbanner{display:flex;background:var(--s1);border:.5px solid var(--b);border-radius:var(--r);overflow:hidden;margin-bottom:1.75rem}
+.pstripe{width:4px;background:var(--or);flex-shrink:0}
+.pbody{padding:1.1rem 1.4rem;flex:1}
+.pdays{font-size:9px;color:var(--or);margin-bottom:4px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+.pname{font-size:16px;font-weight:800;letter-spacing:-.01em;margin-bottom:5px}
+.pgoal{font-size:12.5px;color:var(--mu);line-height:1.85}
+.pgoal strong{color:var(--tx);font-weight:700}
+.pstat{padding:1.1rem 1.4rem;border-right:.5px solid var(--b);display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:2px;flex-shrink:0}
+.pstat-n{font-size:30px;font-weight:900;color:var(--or);line-height:1}
+.pstat-l{font-size:9px;color:var(--mu)}
+
+/* ══ PILLARS ══ */
+.pills{margin-bottom:2rem}
+.slbl{font-size:9px;letter-spacing:.14em;color:var(--mu);margin-bottom:10px;font-weight:700;text-transform:uppercase}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:6px}
+.prow{display:flex;align-items:center;gap:9px;background:var(--s1);border:.5px solid var(--b);border-radius:7px;padding:8px 12px;transition:border-color .18s}
+.prow:hover{border-color:var(--bh)}
+.prow-n{font-size:11.5px;color:var(--mu);flex:1;font-weight:600}
+.prow-t{width:64px;height:3px;background:var(--s4);border-radius:100px;overflow:hidden;flex-shrink:0}
+.prow-f{height:100%;border-radius:100px;background:var(--or)}
+.prow-p{font-size:10px;color:var(--or);width:28px;text-align:left;flex-shrink:0;font-weight:700}
+
+/* ══ CHECKLIST HEADER ══ */
+.clhdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:7px}
+.cldone{font-size:10px;padding:3px 11px;border-radius:100px;border:.5px solid var(--gn-b);background:var(--gn-d);color:var(--gn);font-weight:700}
+
+/* ══ ITEM ══ */
+.iw{margin-bottom:6px}
+.iw.hide{display:none}
+.item{background:var(--s1);border:.5px solid var(--b);border-radius:var(--r);overflow:hidden;transition:border-color .18s}
+.item:hover{border-color:var(--bh)}
+.item.done{border-color:var(--gn-b)}
+.item.done .ihook{text-decoration:line-through;opacity:.38}
+.item.xpd:not(.done){border-color:var(--or-b)}
+
+.irow{display:flex;align-items:flex-start;gap:11px;padding:13px 14px;cursor:pointer;user-select:none}
+.chk{width:19px;height:19px;border-radius:5px;border:1.5px solid rgba(255,255,255,0.13);flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .18s;margin-top:3px;cursor:pointer}
+.chk:hover{border-color:var(--gn)}
+.chk.on{background:var(--gn);border-color:var(--gn)}
+.chk svg{display:none}
+.chk.on svg{display:block}
+
+.imain{flex:1;min-width:0}
+.imeta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px}
+.itype{font-size:8px;letter-spacing:.08em;padding:2px 7px;border-radius:3px;text-transform:uppercase;flex-shrink:0;font-weight:700}
+.itype.reel{border:.5px solid var(--or-b);color:var(--or);background:var(--or-d)}
+.itype.carousel{border:.5px solid var(--pu-b);color:var(--pu);background:var(--pu-d)}
+.itype.story{border:.5px solid var(--bl-b);color:var(--bl);background:var(--bl-d)}
+.iid{font-size:8px;color:var(--hi);font-weight:700}
+.ihook{font-size:13.5px;font-weight:700;color:var(--tx);line-height:1.45}
+.itags{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.tag{font-size:9px;padding:2px 8px;border-radius:100px;border:.5px solid;font-weight:700}
+.t-anger{border-color:var(--or-b);color:var(--or);background:var(--or-d)}
+.t-relatable{border-color:var(--bl-b);color:var(--bl);background:var(--bl-d)}
+.t-controversy{border-color:var(--pu-b);color:var(--pu);background:var(--pu-d)}
+.t-aspiration{border-color:var(--gn-b);color:var(--gn);background:var(--gn-d)}
+.t-insecurity{border-color:var(--am-b);color:var(--am);background:var(--am-d)}
+.t-curiosity{border-color:var(--bh);color:var(--mu);background:transparent}
+.t-humor{border-color:var(--rd-d);color:var(--rd);background:var(--rd-d)}
+
+.ichev{flex-shrink:0;width:26px;height:26px;border-radius:5px;border:.5px solid var(--b);background:var(--s2);color:var(--mu);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .18s;margin-top:1px}
+.ichev:hover{border-color:var(--or-b);color:var(--or)}
+.ichev svg{transition:transform .2s cubic-bezier(.4,0,.2,1)}
+.ichev.on{background:var(--or-d);border-color:var(--or-b);color:var(--or)}
+.ichev.on svg{transform:rotate(180deg)}
+
+/* ══ DETAIL PANEL ══ */
+.idet{display:none;border-top:.5px solid var(--b);padding:14px}
+.idet.on{display:block}
+.nota-lbl{font-size:9px;color:var(--mu);margin-bottom:5px;font-weight:700;letter-spacing:.06em}
+.nota{width:100%;background:var(--s2);border:.5px solid var(--b);border-radius:6px;padding:8px 11px;color:var(--tx);font-family:'Cairo',sans-serif;font-size:11.5px;resize:vertical;min-height:48px;line-height:1.7;outline:none;transition:border-color .18s;margin-bottom:12px;direction:rtl}
+.nota::placeholder{color:var(--mu);opacity:.45}
+.nota:focus{border-color:var(--or-b)}
+.dgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:580px){.dgrid{grid-template-columns:1fr}}
+.db{background:var(--s2);border:.5px solid var(--b);border-radius:7px;padding:10px 12px}
+.db.full{grid-column:1/-1}
+.db.acc{border-color:var(--or-b);background:var(--or-d)}
+.db.goal{border-color:var(--gn-b);background:var(--gn-d)}
+.dlbl{font-size:8.5px;color:var(--hi);margin-bottom:4px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.dval{font-size:12px;color:var(--mu);line-height:1.8}
+.dval.br{color:var(--or);font-weight:700;font-size:13px}
+.dval.ok{color:var(--gn);font-weight:700}
+.ctawrap{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+.ctap{font-size:9.5px;padding:3px 9px;border-radius:100px;border:.5px solid var(--b);background:var(--s3);color:var(--mu);font-weight:600}
+
+/* ══ STATS ══ */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:1.5rem}
+.scard{background:var(--s1);border:.5px solid var(--b);border-radius:var(--r);padding:.85rem 1rem;transition:border-color .18s}
+.scard:hover{border-color:var(--bh)}
+.slbl2{font-size:9px;color:var(--mu);margin-bottom:6px;font-weight:700}
+.sval{font-size:24px;font-weight:900;line-height:1}
+.sval small{font-size:11px;font-weight:400;color:var(--mu);margin-right:2px}
+.sval.or{color:var(--or)}
+.sval.gn{color:var(--gn)}
+
+/* ══ DIVIDER ══ */
+.div{display:flex;align-items:center;gap:12px;padding:1.5rem 0 1.2rem}
+.div::before,.div::after{content:'';flex:1;height:.5px;background:var(--b)}
+.div span{font-size:9px;color:var(--mu);white-space:nowrap;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+
+/* ══ SILENCE PHASE ══ */
+.sil-header{background:linear-gradient(135deg,rgba(200,160,16,0.08),rgba(200,160,16,0.03));border:.5px solid var(--yl-b);border-radius:var(--r);padding:1.5rem;margin-bottom:1.75rem;position:relative;overflow:hidden}
+.sil-header::before{content:'';position:absolute;top:-40px;left:-40px;width:120px;height:120px;background:radial-gradient(circle,rgba(200,160,16,0.12),transparent 70%);pointer-events:none}
+.sil-badge{display:inline-flex;align-items:center;gap:6px;background:var(--yl-d);border:.5px solid var(--yl-b);border-radius:5px;padding:4px 10px;font-size:9px;font-weight:700;color:var(--yl);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px}
+.sil-title{font-size:20px;font-weight:900;color:var(--tx);margin-bottom:6px}
+.sil-sub{font-size:13px;color:var(--mu);line-height:1.8}
+.sil-sub strong{color:var(--yl);font-weight:700}
+.sil-rules{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+@media(max-width:560px){.sil-rules{grid-template-columns:1fr}}
+.sil-rule{border-radius:7px;padding:12px 14px}
+.sil-rule.no{background:rgba(192,56,88,0.08);border:.5px solid rgba(192,56,88,0.25)}
+.sil-rule.yes{background:rgba(34,170,88,0.07);border:.5px solid var(--gn-b)}
+.sil-rule-ttl{font-size:10px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:5px}
+.sil-rule.no .sil-rule-ttl{color:var(--rd)}
+.sil-rule.yes .sil-rule-ttl{color:var(--gn)}
+.sil-rule-item{font-size:11.5px;color:var(--mu);display:flex;align-items:flex-start;gap:6px;margin-bottom:5px;line-height:1.6}
+.sil-rule-item::before{content:'◆';font-size:5px;margin-top:6px;flex-shrink:0}
+.sil-rule.no .sil-rule-item::before{color:var(--rd)}
+.sil-rule.yes .sil-rule-item::before{color:var(--gn)}
+
+/* Silence day cards */
+.sdays{display:flex;flex-direction:column;gap:8px}
+.sday{background:var(--s1);border:.5px solid var(--b);border-radius:var(--r);overflow:hidden;transition:border-color .18s}
+.sday:hover{border-color:var(--yl-b)}
+.sday.done-s{border-color:var(--gn-b)}
+.sday-hdr{display:flex;align-items:center;cursor:pointer;user-select:none}
+.sday-num{background:var(--yl-d);border-left:.5px solid var(--yl-b);color:var(--yl);font-size:12px;font-weight:900;padding:.9rem 1.1rem;flex-shrink:0;min-width:72px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1px}
+.sday-num span{font-size:9px;font-weight:500;opacity:.8}
+.sday.done-s .sday-num{background:var(--gn-d);border-color:var(--gn-b);color:var(--gn)}
+.sday-wrap{flex:1;padding:.9rem 1.2rem;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.sday-ttl{font-size:13.5px;font-weight:700;color:var(--tx)}
+.sday-sub{font-size:11px;color:var(--mu);margin-top:2px}
+.sday-badge{font-size:9px;padding:3px 9px;border-radius:100px;font-weight:700;border:.5px solid var(--yl-b);background:var(--yl-d);color:var(--yl);white-space:nowrap;flex-shrink:0}
+.sday-chev{flex-shrink:0;width:24px;height:24px;border-radius:5px;border:.5px solid var(--b);background:var(--s2);color:var(--mu);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .18s;margin-left:.9rem}
+.sday-chev svg{transition:transform .2s}
+.sday-chev.on svg{transform:rotate(180deg)}
+.sday-body{display:none;border-top:.5px solid var(--b)}
+.sday-body.on{display:block}
+.sday-inner{padding:1.1rem 1.4rem;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:560px){.sday-inner{grid-template-columns:1fr}}
+.sdi-lbl{font-size:8.5px;color:var(--hi);font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:7px}
+.sdi-task{display:flex;align-items:flex-start;gap:7px;font-size:12px;color:var(--mu);line-height:1.7;margin-bottom:5px}
+.sdi-task::before{content:'◆';color:var(--yl);font-size:5.5px;margin-top:6px;flex-shrink:0}
+.sdi-task strong{color:var(--tx);font-weight:700}
+.sdi-tip{background:var(--yl-d);border:.5px solid var(--yl-b);border-radius:6px;padding:10px 12px;font-size:12px;color:var(--mu);line-height:1.75;margin-top:4px}
+.sdi-tip strong{color:var(--yl);font-weight:700}
+.sday-chkrow{display:flex;align-items:center;gap:8px;padding:.75rem 1.2rem;border-top:.5px solid var(--b);background:var(--s2)}
+.pchk{width:17px;height:17px;border-radius:4px;border:1.5px solid rgba(255,255,255,0.13);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .18s;flex-shrink:0}
+.pchk:hover{border-color:var(--gn)}
+.pchk.on{background:var(--gn);border-color:var(--gn)}
+.pchk svg{display:none}
+.pchk.on svg{display:block}
+.pchk-lbl{font-size:11.5px;color:var(--mu);cursor:pointer;font-weight:600}
+
+/* ══ STRATEGY ══ */
+.sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:9px}
+.sc{background:var(--s1);border:.5px solid var(--b);border-radius:var(--r);padding:1.1rem 1.3rem;transition:border-color .18s}
+.sc:hover{border-color:var(--bh)}
+.sc-ic{font-size:20px;margin-bottom:9px}
+.sc-tt{font-size:13.5px;font-weight:800;margin-bottom:7px}
+.sc-bd{font-size:12px;color:var(--mu);line-height:1.9}
+.sc-bd li{margin-right:14px;margin-bottom:3px;list-style:disc}
+.sc-bd li strong{color:var(--tx);font-weight:700}
+
+/* ══ HOOKS ══ */
+.hgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:7px}
+.hk{background:var(--s1);border:.5px solid var(--b);border-radius:7px;padding:11px 13px;transition:border-color .18s;position:relative;overflow:hidden;cursor:default}
+.hk::after{content:'';position:absolute;right:0;top:0;bottom:0;width:3px;background:var(--or);opacity:.3;border-radius:0 3px 3px 0;transition:opacity .18s}
+.hk:hover{border-color:var(--or-b)}
+.hk:hover::after{opacity:1}
+.hk-tx{font-size:12.5px;font-weight:700;color:var(--tx);line-height:1.55;margin-bottom:7px;padding-right:7px}
+.hk-tg{display:flex;gap:4px;flex-wrap:wrap;padding-right:7px}
+
+/* ══ VAULT (PROMPTS + LINKS) ══ */
+.vault-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:640px){.vault-grid{grid-template-columns:1fr}}
+.vault-panel{background:var(--s1);border:.5px solid var(--b);border-radius:var(--r);overflow:hidden}
+.vault-head{padding:1rem 1.2rem;border-bottom:.5px solid var(--b);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.vault-ttl{font-size:13px;font-weight:800}
+.vault-add{font-size:11px;padding:6px 14px;border-radius:6px;border:.5px solid var(--or-b);background:var(--or-d);color:var(--or);cursor:pointer;font-family:'Cairo',sans-serif;font-weight:700;transition:all .18s}
+.vault-add:hover{background:var(--or);color:#fff}
+.vault-form{padding:10px 12px;border-bottom:.5px solid var(--b);display:none;background:var(--s2)}
+.vault-form.on{display:block}
+.vinput{width:100%;background:var(--s3);border:.5px solid var(--b);border-radius:6px;padding:8px 11px;color:var(--tx);font-family:'Cairo',sans-serif;font-size:12px;outline:none;margin-bottom:6px;transition:border-color .18s;direction:rtl}
+.vinput:focus{border-color:var(--or-b)}
+.vinput::placeholder{color:var(--mu);opacity:.5}
+.vtarea{width:100%;background:var(--s3);border:.5px solid var(--b);border-radius:6px;padding:8px 11px;color:var(--tx);font-family:'Cairo',sans-serif;font-size:12px;outline:none;resize:vertical;min-height:70px;line-height:1.65;direction:rtl;margin-bottom:6px;transition:border-color .18s}
+.vtarea:focus{border-color:var(--or-b)}
+.vtarea::placeholder{color:var(--mu);opacity:.5}
+.vsave{font-size:11px;padding:6px 16px;border-radius:5px;background:var(--or);color:#fff;border:none;cursor:pointer;font-family:'Cairo',sans-serif;font-weight:700;transition:background .18s}
+.vsave:hover{background:#d4521f}
+.vlist{padding:10px 12px;display:flex;flex-direction:column;gap:6px;max-height:380px;overflow-y:auto}
+.vitem{background:var(--s2);border:.5px solid var(--b);border-radius:6px;padding:9px 11px;position:relative;transition:border-color .18s}
+.vitem:hover{border-color:var(--bh)}
+.vitem-ttl{font-size:12px;font-weight:700;color:var(--tx);margin-bottom:3px}
+.vitem-body{font-size:11px;color:var(--mu);line-height:1.7;white-space:pre-wrap;word-break:break-all}
+.vitem-link{font-size:11px;color:var(--bl);text-decoration:none;word-break:break-all;display:block;margin-top:2px}
+.vitem-link:hover{text-decoration:underline}
+.vdel{position:absolute;top:8px;left:8px;width:18px;height:18px;border-radius:4px;background:var(--s4);border:.5px solid var(--b);color:var(--mu);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:10px;transition:all .18s}
+.vdel:hover{background:var(--rd-d);color:var(--rd);border-color:rgba(192,56,88,0.3)}
+.vempty{font-size:12px;color:var(--hi);text-align:center;padding:1.5rem;font-weight:600}
+
+/* ══ FOOTER ══ */
+.footer{border-top:.5px solid var(--b);padding:1.5rem 0 2rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-top:1rem}
+.ftx{font-size:11px;color:var(--mu)}
+.ftx span{color:var(--or);font-weight:700}
+.freset{font-size:10px;padding:6px 14px;border-radius:5px;border:.5px solid var(--b);background:transparent;color:var(--mu);cursor:pointer;font-family:'Cairo',sans-serif;font-weight:700;transition:all .18s}
+.freset:hover{border-color:var(--rd);color:var(--rd)}
+
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--s4);border-radius:3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- HEADER -->
+<header class="hdr">
+  <div class="hdr-l">
+    <div class="hdr-eye">نظام تشغيل المحتوى الاحترافي</div>
+    <h1 class="hdr-ttl">100 يوم من <em>اللياقة</em><br>نظام التشغيل الكامل</h1>
+    <p class="hdr-sub">3 مراحل نشر · مرحلة صمت 10 أيام · خزنة الموارد<br>تيك توك + ريلز · كوتشينغ + Full Fit System</p>
+  </div>
+  <div class="hdr-r">
+    <div class="ring-num" id="rval">0</div>
+    <svg class="ring-svg" width="66" height="66" viewBox="0 0 66 66">
+      <circle cx="33" cy="33" r="27" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="5"/>
+      <circle id="rpath" cx="33" cy="33" r="27" fill="none" stroke="#e8622a" stroke-width="5"
+        stroke-linecap="round" stroke-dasharray="169.6" stroke-dashoffset="169.6"
+        style="transition:stroke-dashoffset .5s cubic-bezier(.4,0,.2,1)"/>
+    </svg>
+    <div class="ring-lbl">قطعة<br>مكتملة</div>
+    <!-- ── Sync status indicator ── -->
+    <div class="sync-pill syncing" id="sync-pill" title="حالة المزامنة">
+      <span class="sync-dot"></span>
+      <span id="sync-label">مزامنة...</span>
+    </div>
+  </div>
+</header>
+
+<!-- MAIN TABS -->
+<div class="mtabs">
+  <div class="mt on"    onclick="ST('content')">📋 المحتوى</div>
+  <div class="mt silence-tab" onclick="ST('silence')">🔇 مرحلة الصمت</div>
+  <div class="mt"       onclick="ST('hooks')">🎣 الهوك</div>
+  <div class="mt"       onclick="ST('strategy')">🧠 الاستراتيجية</div>
+  <div class="mt"       onclick="ST('vault')">🗄️ الخزنة</div>
+</div>
+
+<!-- ══════════════ TAB: CONTENT ══════════════ -->
+<div id="tc-content" class="tc on">
+  <div class="pnav">
+    <div class="ptabs">
+      <div class="ptab on" onclick="SP(0)">المرحلة 1 — الانتباه</div>
+      <div class="ptab"    onclick="SP(1)">المرحلة 2 — الثقة</div>
+      <div class="ptab"    onclick="SP(2)">المرحلة 3 — السلطة</div>
+    </div>
+    <div class="fbar">
+      <span class="flbl">فلتر:</span>
+      <div class="fchip on"  onclick="SF(event,'ALL')">الكل</div>
+      <div class="fchip" onclick="SF(event,'REEL')">ريلز</div>
+      <div class="fchip" onclick="SF(event,'CAROUSEL')">كاروسيل</div>
+      <div class="fchip" onclick="SF(event,'STORY')">ستوري</div>
+      <div class="fchip" onclick="SF(event,'done')">✓ مكتمل</div>
+      <div class="fchip" onclick="SF(event,'todo')">○ متبقي</div>
+    </div>
+  </div>
+  <div id="cmain"></div>
+  <div class="stats">
+    <div class="scard"><div class="slbl2">إجمالي القطع</div><div class="sval or">30 <small>فكرة</small></div></div>
+    <div class="scard"><div class="slbl2">ريلز</div><div class="sval" id="sr">–</div></div>
+    <div class="scard"><div class="slbl2">كاروسيل</div><div class="sval" id="sc2">–</div></div>
+    <div class="scard"><div class="slbl2">ستوري</div><div class="sval" id="ss">–</div></div>
+    <div class="scard"><div class="slbl2">مكتمل</div><div class="sval gn" id="sd">0<small>/30</small></div></div>
+    <div class="scard"><div class="slbl2">متبقي</div><div class="sval" id="sl">30</div></div>
+  </div>
+</div>
+
+<!-- ══════════════ TAB: SILENCE ══════════════ -->
+<div id="tc-silence" class="tc">
+  <div class="sil-header">
+    <div class="sil-badge">🔇 مرحلة الصمت الإلزامية</div>
+    <div class="sil-title">10 أيام الصمت — الإنتاج فقط</div>
+    <div class="sil-sub">هذه المرحلة <strong>ليست للنشر</strong>. هي مرحلة إنتاج وتحضير حصرية تسبق إطلاق المحتوى.<br>الهدف: تصوير كل شيء دفعة واحدة، ومراجعة السيناريوهات، وبناء آلة إنتاج لا تتوقف.</div>
+    <div class="sil-rules">
+      <div class="sil-rule no">
+        <div class="sil-rule-ttl">🚫 ممنوع تماماً</div>
+        <div class="sil-rule-item">نشر أي محتوى على المنصات</div>
+        <div class="sil-rule-item">استهداف جمهور أو إعلانات</div>
+        <div class="sil-rule-item">جدولة منشورات</div>
+        <div class="sil-rule-item">توليد أفكار محتوى جديدة</div>
+      </div>
+      <div class="sil-rule yes">
+        <div class="sil-rule-ttl">✅ مسموح فقط</div>
+        <div class="sil-rule-item">التصوير الجماعي لكل المحتوى</div>
+        <div class="sil-rule-item">مراجعة السيناريوهات وتحسينها</div>
+        <div class="sil-rule-item">تحسين الهوك والزوايا</div>
+        <div class="sil-rule-item">تنظيم هيكل المحتوى والمونتاج</div>
+        <div class="sil-rule-item">بناء استراتيجية التشويق الداخلية</div>
+      </div>
+    </div>
+  </div>
+  <div class="slbl" style="margin-bottom:10px">قائمة تحقق مرحلة الصمت — <span id="sil-done-lbl">0 / 10 مكتمل</span></div>
+  <div class="sdays" id="sdays"></div>
+</div>
+
+<!-- ══════════════ TAB: HOOKS ══════════════ -->
+<div id="tc-hooks" class="tc">
+  <div class="div"><span>مكتبة الهوك الاحترافية — 24 هوك</span></div>
+  <div class="hgrid" id="hgrid"></div>
+</div>
+
+<!-- ══════════════ TAB: STRATEGY ══════════════ -->
+<div id="tc-strategy" class="tc">
+  <div class="div"><span>مرجع الاستراتيجية الكاملة</span></div>
+  <div class="sgrid">
+    <div class="sc"><div class="sc-ic">🎬</div><div class="sc-tt">قواعد الريلز</div><div class="sc-bd"><ul>
+      <li>الهوك في أول ثانية إلى ثانيتين — بلا استثناء</li>
+      <li>مدة الفيديو من 10 إلى 25 ثانية فقط</li>
+      <li>افتح الحلقة ولا تغلقها — اجعلهم يريدون المزيد</li>
+      <li>الذروة قبل 80% من وقت الفيديو بالضبط</li>
+      <li>النهاية تدفع للاستمرار النفسي</li>
+      <li>لا "هاي يا شباب" — ادخل في الموضوع فوراً</li>
+    </ul></div></div>
+    <div class="sc"><div class="sc-ic">🧠</div><div class="sc-tt">سيكولوجيا الهوك</div><div class="sc-bd"><ul>
+      <li><strong>الحقيقة المحرمة</strong> — ما لا يجرؤ أحد على قوله</li>
+      <li><strong>الاعتراف العاطفي</strong> — الضعف كطُعم جذب</li>
+      <li><strong>الإدراك القاسي</strong> — يصل مباشرة لحياة المشاهد</li>
+      <li><strong>الرأي المثير للجدل</strong> — يخلق معسكرين فوراً</li>
+      <li><strong>الموقف المضاد للسائد</strong> — ضد ما يقوله الجميع</li>
+      <li><strong>كشف نقطة الألم</strong> — يُسمّي الصراع الصامت</li>
+    </ul></div></div>
+    <div class="sc"><div class="sc-ic">💰</div><div class="sc-tt">قواعد البيع</div><div class="sc-bd"><ul>
+      <li>لا تبدو يائساً — السلطة تبيع نفسها دائماً</li>
+      <li>البيع الناعم: دليل التحول + ذكر عرضي للمنتج</li>
+      <li>البيع القوي: فقط بعد بناء ثقة عميقة في المرحلة 3</li>
+      <li>الكوتشينغ = مساءلة + تخصيص + نتائج حقيقية</li>
+      <li>Full Fit System = ذكاء اصطناعي + دفعة واحدة</li>
+      <li>كلمات تشغيل DM: SYSTEM · FITAI · COACH</li>
+    </ul></div></div>
+    <div class="sc"><div class="sc-ic">📅</div><div class="sc-tt">إيقاع النشر</div><div class="sc-bd"><ul>
+      <li><strong>المرحلة 1:</strong> ريلز يومي + 3 ستوري يومياً</li>
+      <li><strong>المرحلة 2:</strong> ريلز + كاروسيل أسبوعي + ستوري</li>
+      <li><strong>المرحلة 3:</strong> ريلزين يومياً في آخر 10 أيام</li>
+      <li>أفضل أوقات: 7–9ص · 12–2ظ · 7–9م بتوقيتك</li>
+      <li>أعد نشر كل ريلز على TikTok وReels نفس اليوم</li>
+      <li>رد على كل تعليق في أول 30 دقيقة بعد النشر</li>
+    </ul></div></div>
+    <div class="sc"><div class="sc-ic">🎭</div><div class="sc-tt">إطار الهوية</div><div class="sc-bd"><ul>
+      <li>تموضع "أخيراً شخص صادق في هذا المجال"</li>
+      <li>طاقة مضادة للمؤثرين — مؤيدة للحياة الحقيقية</li>
+      <li>المساءلة العامة كمحرك أساسي للمحتوى</li>
+      <li>قصة الطفل السمين = أقصى قدر من الانتماء الجماهيري</li>
+      <li>قلق الصالة ← ثقة الصالة — قوس على 100 يوم</li>
+      <li>النكسات محتوى وليست فشلاً — وثّق كل شيء</li>
+    </ul></div></div>
+    <div class="sc"><div class="sc-ic">✂️</div><div class="sc-tt">خارطة المونتاج</div><div class="sc-bd"><ul>
+      <li>لا موسيقى في أول 1–2 ثانية — أصوات بيئية فقط</li>
+      <li>ترجمة دائماً — 85% يشاهدون بدون صوت</li>
+      <li>تدرج بارد = ضعف / تدرج دافئ = قوة</li>
+      <li>حركة بطيئة للحظات العاطفية الثقيلة فقط</li>
+      <li>قطعات سريعة 0.5–1 ثانية للطاقة والتناقض</li>
+      <li>النص يظهر كلمة كلمة لأقصى استبقاء للمشاهد</li>
+    </ul></div></div>
+  </div>
+</div>
+
+<!-- ══════════════ TAB: VAULT ══════════════ -->
+<div id="tc-vault" class="tc">
+  <div class="div"><span>خزنة الموارد — بروميبت + روابط</span></div>
+  <div class="vault-grid">
+    <!-- PROMPTS -->
+    <div class="vault-panel">
+      <div class="vault-head">
+        <div class="vault-ttl">💬 البرومبت المحفوظة</div>
+        <button class="vault-add" onclick="togVF('pf')">+ إضافة برومبت</button>
+      </div>
+      <div class="vault-form" id="pf">
+        <input class="vinput" id="p-name" placeholder="اسم البرومبت (مثال: هوك ريلز 1)"/>
+        <textarea class="vtarea" id="p-body" placeholder="نص البرومبت كاملاً..."></textarea>
+        <button class="vsave" onclick="addPrompt()">حفظ البرومبت</button>
+      </div>
+      <div class="vlist" id="plist"><div class="vempty">لا توجد برومبت محفوظة بعد</div></div>
+    </div>
+    <!-- LINKS -->
+    <div class="vault-panel">
+      <div class="vault-head">
+        <div class="vault-ttl">🔗 الروابط المرجعية</div>
+        <button class="vault-add" onclick="togVF('lf')">+ إضافة رابط</button>
+      </div>
+      <div class="vault-form" id="lf">
+        <input class="vinput" id="l-title" placeholder="عنوان الرابط (مثال: مرجع مونتاج)"/>
+        <input class="vinput" id="l-url" placeholder="https://..." style="direction:ltr;text-align:left"/>
+        <button class="vsave" onclick="addLink()">حفظ الرابط</button>
+      </div>
+      <div class="vlist" id="llist"><div class="vempty">لا توجد روابط محفوظة بعد</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="ftx">نظام تشغيل المحتوى · <span>100 يوم لياقة</span> · v2.0</div>
+  <button class="freset" onclick="resetAll()">إعادة تعيين كل البيانات</button>
+</footer>
+
+</div><!-- /wrap -->
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+//  LOCAL STORAGE ENGINE — بدون Firebase، بدون شبكة
+//  كل البيانات محفوظة محلياً في المتصفح بشكل دائم
+// ══════════════════════════════════════════════════════════════════
+
+// ──────────────────────────────────────────────────────────────────
+//  §1  localStorage MANAGER
+//  طبقة آمنة فوق localStorage مع fallback لـ memory
+//  في حال كان localStorage مقفل (Wix/private mode)
+// ──────────────────────────────────────────────────────────────────
+
+const LS = (() => {
+  const KEY = 'falcfit_v1';
+  let _mem = null; // memory fallback
+
+  // اختبر إمكانية الكتابة مرة واحدة عند البدء
+  const _canUseLS = (() => {
+    try {
+      localStorage.setItem('__test__', '1');
+      localStorage.removeItem('__test__');
+      return true;
+    } catch (_) { return false; }
+  })();
+
+  function load() {
+    if (_canUseLS) {
+      try {
+        const raw = localStorage.getItem(KEY);
+        return raw ? JSON.parse(raw) : null;
+      } catch (_) { return null; }
+    }
+    return _mem;
+  }
+
+  function save(data) {
+    if (_canUseLS) {
+      try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (_) {}
+    } else {
+      _mem = data;
+    }
+  }
+
+  return { load, save, canUseLS: _canUseLS };
+})();
+
+// ──────────────────────────────────────────────────────────────────
+//  §2  STATE — الحالة الكاملة للتطبيق
+// ──────────────────────────────────────────────────────────────────
+
+const BLANK_STATE = {
+  checked:  {},  // { [cardId]: true/false }
+  notes:    {},  // { [cardId]: string }
+  silDone:  {},  // { [dayIndex]: true/false }
+  silExp:   {},  // { [dayIndex]: true/false } — expanded
+  cExp:     {},  // { [cardId]: true/false }   — expanded
+  prompts:  [],  // [{ id, name, text }]
+  links:    [],  // [{ id, title, url }]
+};
+
+// حمّل البيانات المحفوظة أو ابدأ بحالة فارغة
+const S = Object.assign({}, BLANK_STATE, LS.load() || {});
+
+// احفظ التغييرات فوراً عند كل تعديل
+function persist() {
+  LS.save({
+    checked: S.checked,
+    notes:   S.notes,
+    silDone: S.silDone,
+    silExp:  S.silExp,
+    cExp:    S.cExp,
+    prompts: S.prompts,
+    links:   S.links,
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  §3  SYNC STATUS UI — يعكس حالة الحفظ المحلي
+// ──────────────────────────────────────────────────────────────────
+
+let _fadeTimer = null;
+
+function showSaved() {
+  const pill  = document.getElementById('sync-pill');
+  const label = document.getElementById('sync-label');
+  if (!pill || !label) return;
+  pill.className    = 'sync-pill synced';
+  label.textContent = '💾 محفوظ محلياً';
+  pill.style.opacity = '1';
+  clearTimeout(_fadeTimer);
+  _fadeTimer = setTimeout(() => { pill.style.opacity = '0.35'; }, 3000);
+}
+
+// اعرض الحالة الابتدائية
+(function initStatusPill() {
+  const pill  = document.getElementById('sync-pill');
+  const label = document.getElementById('sync-label');
+  if (!pill || !label) return;
+  if (LS.canUseLS) {
+    pill.className    = 'sync-pill synced';
+    label.textContent = '💾 وضع محلي';
+    pill.style.opacity = '0.35';
+  } else {
+    pill.className    = 'sync-pill offline';
+    label.textContent = '⚠️ ذاكرة مؤقتة';
+    pill.style.opacity = '1';
+  }
+})();
+
+// ──────────────────────────────────────────────────────────────────
+//  §4  DATA CONSTANTS
+// ──────────────────────────────────────────────────────────────────
+
+const HOOKS=[
+  {text:"لا أحد يخبر الشخص السمين بهذا عند بدء التمرين.",tags:["relatable","insecurity"]},
+  {text:"ضيّعت 3 سنوات وأنا آكل 'صحي' وأزيد في الوزن.",tags:["anger","controversy"]},
+  {text:"اللحظة التي أدركت فيها أن الدافعية كذبة.",tags:["relatable","aspiration"]},
+  {text:"صناعة اللياقة لا تريدك أن تعرف هذا عن الكارديو.",tags:["anger","controversy"]},
+  {text:"توقفت عن عدّ السعرات وخسرت وزناً أكثر. إليك السبب.",tags:["controversy","curiosity"]},
+  {text:"هذا 'الطعام الصحي' جعلني أزيد وزناً لسنتين متتاليتين.",tags:["anger","controversy"]},
+  {text:"الصالة لم تكن مشكلتي الحقيقية قط.",tags:["relatable","curiosity"]},
+  {text:"ما يحدث لجسمك حين لا تأكل بروتيناً كافياً — أسبوعاً بأسبوع.",tags:["curiosity","aspiration"]},
+  {text:"أتمنى أن يريني أحد هذا قبل أن أبدأ الحمية.",tags:["relatable","aspiration"]},
+  {text:"كل مؤثر لياقة يكذب عليك في هذه النقطة تحديداً.",tags:["anger","controversy"]},
+  {text:"3 أطعمة تُسوَّق كـ'دايت' تمنعك من فقدان الوزن.",tags:["anger","curiosity"]},
+  {text:"هذا ما تبدو عليه 30 يوماً من عدم الاستسلام — بيانات حقيقية.",tags:["aspiration","relatable"]},
+  {text:"قال لي مدربي أن أتوقف عن الكارديو. خسرت 7 كيلو في 60 يوماً.",tags:["controversy","curiosity"]},
+  {text:"السبب الحقيقي لعدم خسارتك للوزن لا علاقة له بالطعام.",tags:["curiosity","relatable"]},
+  {text:"100 يوم. قرار واحد. لستُ نفس الشخص حقاً.",tags:["aspiration","relatable"]},
+  {text:"أوقف حساب الماكرو حتى تفعل هذا الشيء الواحد أولاً.",tags:["controversy","curiosity"]},
+  {text:"أكلت 2800 سعرة وما زلت أخسر دهوناً كل أسبوع. إليك السبب.",tags:["controversy","curiosity"]},
+  {text:"صناعة المكملات الغذائية خدعة بمليارات الدولارات. إليك الدليل.",tags:["anger","controversy"]},
+  {text:"ما لا يخبرك به أحد عن قلق الصالة كمبتدئ.",tags:["relatable","insecurity"]},
+  {text:"الهضبة ليست فشلاً. جسمك يطلب منك هذا التعديل.",tags:["relatable","curiosity"]},
+  {text:"وظّفت مدرباً وكدت أستسلم في الأسبوع الأول. هذا ما حدث.",tags:["relatable","aspiration"]},
+  {text:"لماذا يفشل معظم الناس في الصالة في اليوم الرابع عشر تحديداً.",tags:["curiosity","relatable"]},
+  {text:"الذكاء الاصطناعي بنى لي نظام تدريب مخصصاً. هذا ما يبدو عليه.",tags:["curiosity","aspiration"]},
+  {text:"أكلت نفس الـ4 وجبات كل يوم لمدة 30 يوماً. هذا ما تعلمته.",tags:["curiosity","relatable"]},
+];
+
+const PHASES=[
+  {
+    days:"اليوم 1–30",name:"المرحلة 1 — الانتباه والانتماء",
+    goal:"اكسب <strong>انتباهاً هائلاً</strong> بسرعة. ارسّخ الانتماء العميق قبل بناء الثقة. كل قطعة خامة وحقيقية وإنسانية. الأولوية: <strong>المتابعون والمشاركات</strong>.",
+    pillars:[{l:"التحول الحقيقي",p:90},{l:"محتوى الهوية",p:85},{l:"رواية القصص",p:80},{l:"التغذية المثيرة للجدل",p:50},{l:"المحتوى التعليمي",p:25},{l:"الأدلة والإثبات",p:20},{l:"البيع",p:5}],
+    cards:[
+      {id:"P1-01",type:"REEL",hook:"لا أحد يخبر الشخص السمين بهذا عند بدء التمرين.",emotion:["relatable","insecurity"],script:"افتح على المنشئ في المنزل، طاقة منخفضة. تعليق صوتي: 'اليوم الأول. كدت لا أصوّر هذا.' قطع إلى موقف السيارات — يتردد. قطع داخل الصالة — محرج، مرهق. ينتهي برفعة واحدة.",visual:"كاميرا يدوية، إضاءة خافتة، خام. بلا فلتر. قطعات سريعة بين التردد والفعل.",editing:"كاميرا مرتجفة تستقر عند أول رفعة. لا موسيقى في أول ثانيتين. ترجمة تظهر كلمة كلمة.",onScreen:"اليوم 1. لا أحد يصوّر هذا الجزء.",caption:"الجزء الذي لا يُظهره أحد. ضع 🔥 إن شعرت بهذا من قبل.",cta:["تعليق — 🔥","دعوة للمتابعة"],goal:"متابعون / تواصل عاطفي"},
+      {id:"P1-02",type:"REEL",hook:"ضيّعت 3 سنوات وأنا آكل 'صحي' وأزيد في الوزن.",emotion:["anger","controversy"],script:"كشف القائمة. 'الزبادي. الجرانولا. بروتين بار. السموذي. كلها أكاذيب تسويقية بلا تتبع.' قطعات سريعة لكل طعام. 'السعرات هي كل شيء. الباقي ضجيج.'",visual:"عرض مسطح للأطعمة. لقطات مقربة. علامة X حمراء. ردود فعل بين كل طعام.",editing:"قطعة واحدة بالثانية. تحريك X. نص أبيض عريض.",onScreen:"توقف عن تسمية هذا 'صحياً' ❌",caption:"صناعة الدايت تربح من إرباكك. احفظ قبل أن تشتري بروتين بار آخر.",cta:["حفظ","تعليق — 'أيها فاجأك؟'"],goal:"حفظ / انتشار / سلطة"},
+      {id:"P1-03",type:"CAROUSEL",hook:"5 أسباب لفشل حميتك في الأسبوع الثاني — لا يتحدث عنها أحد.",emotion:["relatable","curiosity"],script:"شريحة 1: الهوك. شرائح 2–6: سبب واحد قاسٍ لكل شريحة. شريحة 7: الحل. شريحة 8: دعوة للحفظ.",visual:"بطاقة داكنة، نص عريض أبيض/برتقالي. تصميم بسيط.",editing:"لا ينطبق. خط موحد. شريحة أخيرة: دعوة ضخمة.",onScreen:"السبب 1: لا تأكل كفاية (نعم، بجد)",caption:"توقف عن البدء من جديد. هذا السبب الحقيقي لاستسلامك.",cta:["حفظ","تاغ صديق"],goal:"حفظ / انتشار"},
+      {id:"P1-04",type:"REEL",hook:"ما أكله فعلاً في اليوم — بلا كذب ولا رعاية مدفوعة.",emotion:["relatable","aspiration"],script:"يصوّر كل وجبة بصدق. يُظهر الجوع. يُظهر اختياراً 'سيئاً' ويكمل. 'هكذا يبدو فقدان الدهون. ليس مثالياً. ثابتاً.'",visual:"POV للطعام. مطبخ حقيقي. قطعات سريعة مع عداد السعرات.",editing:"GRWM. تسميات نصية لكل وجبة. لا مطابخ فاخرة.",onScreen:"عجز حقيقي. وجبات حقيقية. بلا كلام فارغ.",caption:"توقف عن تصديق ريلز الأكل النظيف. علّق أكبر تحدياتك 👇",cta:["تعليق","متابعة"],goal:"تفاعل / ثقة"},
+      {id:"P1-05",type:"REEL",hook:"اللحظة التي أدركت فيها أن الدافعية كذبة.",emotion:["relatable","aspiration"],script:"استيقظ ولا يريد التمرين. 'انتظرت 3 سنوات. لم تأتِ.' قطع إلى التمرين على أي حال. 'الانضباط قرار واحد تتخذه مرة.'",visual:"غرفة داكنة. منبّه. حركة بطيئة. ثم الصالة مليئة بالطاقة.",editing:"بارد بطيء ← دافئ سريع. تحول موسيقي في المنتصف.",onScreen:"الدافعية كذبة. الانضباط قرار.",caption:"اليوم الذي توقفت فيه عن الانتظار. من احتاج هذا اليوم؟",cta:["تعليق","مشاركة"],goal:"مشاركات / تواصل عاطفي"},
+      {id:"P1-06",type:"REEL",hook:"وزنت نفسي هذا الصباح. إليك الرقم.",emotion:["relatable","insecurity"],script:"يقف على الميزان. يُظهر الرقم. 'هذه نقطة انطلاقي. ليست نقطة وصولي.' قطع إلى تمرين.",visual:"لقطة مقربة للميزان. وجه، تواصل مباشر بالعينين. بلا فلتر.",editing:"لقطة ثابتة للكشف. خام. ثم مونتاج نشاط.",onScreen:"الوزن الابتدائي: [X]. الوزن النهائي: تابع.",caption:"أنشرها على الإنترنت حتى لا أستطيع الاستسلام. تابع الرحلة 👇",cta:["متابعة","تعليق — 'ما هدفك؟'"],goal:"متابعون / سرد المساءلة"},
+      {id:"P1-07",type:"STORY",hook:"تحديث يوم [X] — هذا ما أشعر به فعلاً اليوم.",emotion:["relatable","insecurity"],script:"تحديث خام. يتكلم بلا سيناريو. الطاقة، الرغبات، المزاج. ينتهي باستفتاء: 'هل أنت في رحلتك الخاصة؟'",visual:"كاميرا سيلفي. ملصقات ستوري. استفتاء.",editing:"أصيل. لا تعديل ثقيل.",onScreen:"اليوم [X] — التحديث الحقيقي",caption:"لا ينطبق — ستوري",cta:["استفتاء","رسالة مباشرة"],goal:"تفاعل / استبقاء"},
+      {id:"P1-08",type:"REEL",hook:"مررت بأسبوع سيء جداً. هذا سبب نشري رغم ذلك.",emotion:["relatable","insecurity"],script:"اعتراف صادق. أكل سيئ، تخطّى الصالة. 'الذين يتحولون هم من يجدون سبباً للبقاء.' ينتهي بالنهوض.",visual:"طاقة منخفضة. وجه حقيقي. ثم لقطة تمرين.",editing:"بطيء عاطفي. تحول موسيقي. يبني نحو إصرار.",onScreen:"أسبوع سيء. أنشر رغم ذلك.",caption:"لكل من مرّ بأسبوع مثل أسبوعي. الحضور لم ينتهِ حتى تقول ذلك 💪",cta:["مشاركة","تعليق"],goal:"مشاركات / عمق عاطفي"},
+      {id:"P1-09",type:"CAROUSEL",hook:"قلق الصالة الذي لا يتحدث عنه أحد — وكيف أتعامل معه.",emotion:["relatable","insecurity"],script:"شريحة 1: الهوك. شرائح 2–5: لحظات قلق محددة. شرائح 6–7: إعادة تأطير. شريحة 8: دعوة.",visual:"بطاقات داكنة. نبرة عاطفية دافئة.",editing:"لا ينطبق.",onScreen:"لستَ الوحيد الذي يشعر بهذا.",caption:"إن شعرت أنك خارج مكانك في الصالة — هذا لك.",cta:["حفظ","تاغ","متابعة"],goal:"تواصل عاطفي / انتشار"},
+      {id:"P1-10",type:"REEL",hook:"ما يشعر به فعلاً 'الأكل في العجز' — النسخة الصادقة.",emotion:["relatable","humor"],script:"يُظهر الجوع، الرغبات، عدّ اللوز، معارك منتصف الليل مع الثلاجة. 'ما أخبرني أحد أن إنقاص الوزن سيجعلني أفكر بالطعام 24/7.'",visual:"POV مبالغ به لعدّ الطعام. ساعة منتصف الليل. ينظر للثلاجة.",editing:"فكاهية سريعة. ردود فعل مضحكة. نصوص لاذعة.",onScreen:"أنا الساعة 11م: 'تبقت لي 47 سعرة.'",caption:"محتوى الدايت الذي لا يُظهرونه. من يتعرف؟ 😂",cta:["تعليق","تاغ","مشاركة"],goal:"انتشار / مشاركات"},
+    ]
+  },
+  {
+    days:"اليوم 31–60",name:"المرحلة 2 — الثقة والزخم",
+    goal:"عمّق السلطة من خلال <strong>الأدلة الملموسة</strong>. أظهر الدليل المبكر. زد التفاعل بمحتوى تعليمي أقوى. ابدأ <strong>البيع الناعم</strong> من خلال أدلة التحول.",
+    pillars:[{l:"الأدلة والإثبات",p:85},{l:"التغذية المثيرة للجدل",p:80},{l:"المحتوى التعليمي",p:75},{l:"التحول الحقيقي",p:70},{l:"رواية القصص",p:65},{l:"محتوى الهوية",p:50},{l:"البيع",p:20}],
+    cards:[
+      {id:"P2-01",type:"REEL",hook:"تحديث 30 يوماً. نفس الشخص. جسد مختلف.",emotion:["aspiration","relatable"],script:"كشف جنباً إلى جنب. اليوم 1 مقابل اليوم 30. 'هذا ما تبدو عليه 30 يوماً من عدم الاستسلام. حقيقية.'",visual:"شاشة منقسمة. نفس الإضاءة والملابس والزاوية.",editing:"كشف سينمائي بطيء. تصاعد موسيقي. بيانات نظيفة.",onScreen:"اليوم 1 ← اليوم 30. [X] كيلو أقل.",caption:"30 يوماً مضت. هذا ما تغيّر. احفظ إن كنت في رحلتك.",cta:["حفظ","متابعة","رسالة مباشرة"],goal:"سلطة / ثقة / متابعون"},
+      {id:"P2-02",type:"REEL",hook:"صناعة اللياقة لا تريدك أن تعرف هذا عن الكارديو.",emotion:["anger","controversy"],script:"ثلاثة أساطير بسرعة. 'الميزان لن يتحرك بالكارديو وحده. شوكتك أقوى من أي جهاز.'",visual:"جهاز جري ← أكل على مكتب. رسم بياني بسيط.",editing:"قطعات سريعة. طبقات رسومية. ردود فعل.",onScreen:"الكارديو وحده = أسطورة ❌",caption:"سنتان على جهاز الجري وبقيت سميناً. هذا السبب.",cta:["حفظ","تعليق"],goal:"حفظ / سلطة"},
+      {id:"P2-03",type:"CAROUSEL",hook:"برنامجي التدريبي الدقيق لفقدان الدهون — تفصيل كامل.",emotion:["curiosity","aspiration"],script:"شريحة 1: الهوك. شرائح 2–6: يوم بيوم مع المبرر. شريحة 7: النتائج. شريحة 8: عرض رسالة.",visual:"بطاقات داكنة نظيفة. طباعة قوية.",editing:"لا ينطبق. شريحة أخيرة: دعوة رسالة.",onScreen:"النظام الدقيق. اسحب لتسرقه.",caption:"توقف عن التخمين. أسبوعي كاملاً. احفظ وشارك.",cta:["حفظ","رسالة مباشرة"],goal:"سلطة / حفظ"},
+      {id:"P2-04",type:"REEL",hook:"هذا 'الطعام الدايت' يحتوي سعرات أكثر من بيغ ماك. بجدية.",emotion:["anger","controversy"],script:"في المتجر. يأخذ 'طعام دايت'. يُظهر التسمية. يقارن. 'يلعبون بك.' ثلاثة أمثلة أخرى.",visual:"POV داخل المتجر. هاتف يمسح التسميات. رسم بياني مقارن.",editing:"يدوي عفوي. صدمة حقيقية. نصوص حمراء.",onScreen:"طعام دايت ليس دايت 🚨",caption:"احفظ هذا في المرة القادمة التي تتسوق. التسويق جنون.",cta:["حفظ","تاغ"],goal:"حفظ / انتشار"},
+      {id:"P2-05",type:"REEL",hook:"هذا ما لا يخبرك به أحد عن الوصول إلى الهضبة.",emotion:["relatable","curiosity"],script:"صادق: توقفت الميزان. يشرح التكيف الأيضي. ثلاثة إصلاحات. 'الهضبة ليست فشلاً. إنها تغذية راجعة.'",visual:"محبط في المنزل. ملاحظات. تدريب أذكى.",editing:"عاطفي ← معلوماتي ← ملهم. ثلاثة أفعال في 20 ثانية.",onScreen:"الميزان واقف؟ هذا السبب. وكيف تصلحه.",caption:"الأسبوع الخامس كان قاسياً. هذا ما علّمتني إياه الهضبة 👇",cta:["تعليق","متابعة"],goal:"تفاعل / ثقة"},
+      {id:"P2-06",type:"REEL",hook:"بنيت نظام تدريب بالذكاء الاصطناعي. هذا ما يبدو عليه.",emotion:["curiosity","aspiration"],script:"يشرح Full Fit System على الشاشة. 'طلبت من الذكاء الاصطناعي بناء أكفأ نظام بناءً على جدولي وتعافيي.'",visual:"تسجيل الشاشة فوق لقطات التدريب.",editing:"طاقة عرض المنتج. انتقالات سلسة.",onScreen:"نظام التدريب بالذكاء الاصطناعي — شرح كامل",caption:"توقفت عن البرامج العشوائية. الرابط بالبايو.",cta:["بيع ناعم — Full Fit System","متابعة"],goal:"وعي بالمنتج"},
+      {id:"P2-07",type:"STORY",hook:"سأريك بالضبط ما أكلته اليوم — كل شيء.",emotion:["relatable","aspiration"],script:"سلسلة ستوري طوال اليوم. الإفطار، الغداء، الوجبة الخفيفة، العشاء. ملخص نهاية اليوم. استفتاء.",visual:"كاميرا الهاتف. حياة حقيقية. ملصق السعرات.",editing:"ستوري أصيل.",onScreen:"يوميات الطعام الكاملة",caption:"لا ينطبق — ستوري",cta:["استفتاء","رسالة"],goal:"رابط وجداني"},
+      {id:"P2-08",type:"REEL",hook:"سألت 10 أشخاص في الصالة ماذا يأكلون. الإجابات صدمتني.",emotion:["curiosity","humor"],script:"مقابلات ودية. كشف أخطاء بخفة. 'معظم الناس يعملون بجد ويأكلون خطأ. لا تكن معظم الناس.'",visual:"B-roll عفوي. مايك غير رسمي. قطعات سريعة.",editing:"شخص في الشارع. ترجمة. تكبير لردود الفعل.",onScreen:"ما يأكلونه vs ما يجب أن يأكلوه",caption:"الصالة مليئة بهذا الخطأ. هل أنت منهم؟ 👇",cta:["تعليق","مشاركة"],goal:"انتشار / تفاعل"},
+      {id:"P2-09",type:"CAROUSEL",hook:"10 أساطير تغذوية تمنعك من فقدان الدهون — مكشوفة.",emotion:["anger","curiosity"],script:"شريحة 1: الهوك. شرائح 2–11: أسطورة لكل شريحة. شريحة 12: ملخص. شريحة 13: دعوة.",visual:"تباين عالٍ. الأسطورة باللون الباهت. الحقيقة بالأبيض.",editing:"لا ينطبق.",onScreen:"الأسطورة #1: الدهون تجعلك سميناً ❌",caption:"10 أكاذيب باعتها الصناعة. احفظ وأرسل لمن يحتاجه.",cta:["حفظ","تاغ"],goal:"سلطة / انتشار"},
+      {id:"P2-10",type:"REEL",hook:"اليوم 45. كدت أستسلم الليلة الماضية. هذا ما أوقفني.",emotion:["relatable","aspiration"],script:"اعتراف عاطفي. 'الذين يتحولون هم من يجدون سبباً واحداً للبقاء.' ينتهي بلقطات تدريب.",visual:"خام أمام الكاميرا. ثم الصالة بطاقة كاملة.",editing:"خام عاطفي. يبني نحو مونتاج. خاتمة تطهيرية.",onScreen:"45 يوماً. كدت أستسلم الليلة الماضية.",caption:"لكل من في منتصف رحلته. أنت أقرب مما تظن 💪",cta:["مشاركة","تعليق"],goal:"مشاركات / استبقاء"},
+    ]
+  },
+  {
+    days:"اليوم 61–100",name:"المرحلة 3 — السلطة والتحويل",
+    goal:"عظّم <strong>الأدلة</strong> وادفع الولاء لذروته. زد التحويلات بقوة. البيع القوي الآن <strong>مكتسب بالكامل</strong> — استخدمه بلا اعتذار.",
+    pillars:[{l:"الأدلة والإثبات",p:95},{l:"البيع",p:80},{l:"رواية القصص",p:75},{l:"المحتوى التعليمي",p:70},{l:"التغذية المثيرة للجدل",p:60},{l:"التحول الحقيقي",p:55},{l:"محتوى الهوية",p:35}],
+    cards:[
+      {id:"P3-01",type:"REEL",hook:"100 يوم. هذا ما تغيّر كله. لستُ نفس الشخص حقاً.",emotion:["aspiration","relatable"],script:"قبل/بعد سينمائي. الوزن مكشوف. لحظات رئيسية تُعاد. 'اليوم الأول لن يصدق هذا.' دعوة كوتشينغ.",visual:"ميني-وثائقي. اليوم 1 خام ← اليوم 100 واثق.",editing:"وثائقي. كشوف بطيئة. ذروة عند 80%. خاتمة هادئة.",onScreen:"100 يوم. [X] كيلو. كل شيء تغيّر.",caption:"قبل 100 يوم كدت لا أنشر اليوم الأول. في اليوم 1؟ راسلني.",cta:["رسالة — كوتشينغ","متابعة","مشاركة"],goal:"تحويلات / سلطة"},
+      {id:"P3-02",type:"REEL",hook:"3 أشياء تمنيت أن يخبرني بها أحد في اليوم الأول.",emotion:["relatable","aspiration"],script:"ثلاثة دروس صادقة. 'الطعام دائماً المشكلة. الاستمرارية تتغلب على الكمال. المساءلة العامة تغيّر كل شيء.'",visual:"جالس، كاميرا مباشرة. B-roll يوضح كل درس.",editing:"هادئ واثق. ثلاثة أفعال. مرساة عاطفية.",onScreen:"ما علّمتني إياه 100 يوم مما لم تعلّمه 5 سنوات.",caption:"هذه الدروس أخذت مني 100 يوم. احفظ هذا.",cta:["حفظ","مشاركة","رسالة كوتشينغ"],goal:"سلطة / ثقة"},
+      {id:"P3-03",type:"CAROUSEL",hook:"النظام الكامل لـ[X] كيلو في 100 يوم — لا شيء محجوب.",emotion:["aspiration","curiosity"],script:"شريحة 1: الهوك + الوزن المفقود. شرائح 2–6: التغذية، التدريب، الذكاء الاصطناعي، الإطار الذهني، البيانات. شريحة 7: Full Fit System. شريحة 8: كوتشينغ.",visual:"جمالية داكنة متميزة. لهجة برتقالية. بيانات حقيقية.",editing:"لا ينطبق. أكثر قطعة مصقولة في الحملة.",onScreen:"الخطة الدقيقة. لا شيء محجوب. اسحب ←",caption:"كل ما فعلته 100 يوم في كاروسيل. احفظه. ثم راسلني.",cta:["حفظ","رسالة","بيع قوي — Full Fit System"],goal:"مبيعات / تحويلات"},
+      {id:"P3-04",type:"REEL",hook:"عميلي خسر 8 كيلو باستخدام نفس نظامي. إليك الدليل.",emotion:["aspiration","curiosity"],script:"تحول العميل (بإذن). مقارنة جانبية. 'أعطيته نظامي. نفّذ. النتائج جاءت.'",visual:"قبل/بعد للعميل. طبقات رسومية. صوت المنشئ.",editing:"سلطة. نظيف، واثق. الدليل يتكلم.",onScreen:"نتائج العميل. نفس النظام. دليل حقيقي.",caption:"هذا ليس تحولي وحده. يعمل. راسل 'SYSTEM'.",cta:["بيع قوي — كوتشينغ","كلمة: SYSTEM"],goal:"مبيعات"},
+      {id:"P3-05",type:"REEL",hook:"لماذا توقفت عن متابعة كل مؤثر لياقة كنت أتابعه.",emotion:["anger","controversy"],script:"يكشف المحتوى العام والمنشورات المدفوعة. 'هم يبيعونك منتجاً. أنا أريك حياتي الفعلية.'",visual:"يتصفح الهاتف مُظهراً أمثلة. أمام الكاميرا واثق.",editing:"مواجهة حادة. قطعات سريعة. بلا اعتذارات.",onScreen:"صناعة اللياقة مبنية على إبقائك مرتبكاً.",caption:"التحول الحقيقي لا يشبه محتواهم. تابع للنسخة الحقيقية.",cta:["متابعة","تعليق"],goal:"سلطة / تمايز"},
+      {id:"P3-06",type:"REEL",hook:"نظام التدريب بالذكاء الاصطناعي الذي كان سيوفّر عليّ 3 سنوات — متاح الآن.",emotion:["aspiration","curiosity"],script:"كشف كامل للمنتج. 'دفعة واحدة. نظامك المخصص، إلى الأبد.' عرض توضيحي. دليل اجتماعي.",visual:"عرض توضيحي. طبقات الشاشة. مونتاج نتائج. كشف السعر.",editing:"إطلاق المنتج. نظيف متميز. عرض + دليل + دعوة في 25 ثانية.",onScreen:"Full Fit System — دفعة واحدة. ابنِ نظامك.",caption:"بنيت النظام الذي كنت أتمنى وجوده منذ 3 سنوات. الرابط بالبايو.",cta:["بيع قوي — Full Fit System","كلمة: FITAI"],goal:"مبيعات"},
+      {id:"P3-07",type:"STORY",hook:"الأسبوع الأخير — اسألني أي شيء عن الـ100 يوم.",emotion:["aspiration","relatable"],script:"يفتح صندوق الأسئلة. يجيب على أفضل الأسئلة بردود فيديو. ينتهي بدعوة واضحة للكوتشينغ.",visual:"ملصق صندوق السؤال. ردود فيديو. غير رسمي.",editing:"ستوري أصيل.",onScreen:"اسألني أي شيء 👇",caption:"لا ينطبق — ستوري",cta:["رسالة","دعوة كوتشينغ"],goal:"عمق وجداني / تحويلات"},
+      {id:"P3-08",type:"REEL",hook:"تتبعت كل شيء 100 يوم. هذا ما تقوله البيانات فعلاً.",emotion:["curiosity","aspiration"],script:"كشف البيانات. كيلو مفقودة، تمارين مكتملة، سعرات مسجّلة، أيام متخطاة. 'البيانات لا تكذب.'",visual:"طبقات بيانات. أرقام تتحرك. ردود فعل.",editing:"كشف متصاعد. الموسيقى تتصاعد. الإحصاء الأخير هو الأكثر تأثيراً.",onScreen:"100 يوم من البيانات. الحقيقة الحقيقية.",caption:"الأرقام لا تكذب. احفظ هذا.",cta:["حفظ","تعليق"],goal:"سلطة / دليل"},
+      {id:"P3-09",type:"CAROUSEL",hook:"قبل أن تبدأ تحولاً — اقرأ كل شريحة من هذا أولاً.",emotion:["relatable","aspiration"],script:"الهوك، التحول الذهني، ما تتبعه، العادة الواحدة، كيف تنجو من الأسبوع الثاني، التقدم الحقيقي، الجداول الزمنية، كوتشينغ.",visual:"بطاقات داكنة نظيفة. لهجة برتقالية.",editing:"لا ينطبق. أصل التحويل الأخير.",onScreen:"الدليل الصادق لبدء التحول.",caption:"تمنيت أن يعطيني أحد هذا منذ 3 سنوات. احفظه.",cta:["حفظ","مشاركة","بيع قوي"],goal:"سلطة / مبيعات"},
+      {id:"P3-10",type:"REEL",hook:"هذا ما حدث لثقتي بنفسي بعد خسارة [X] كيلو.",emotion:["aspiration","relatable"],script:"يتأمل التغييرات الداخلية. 'الوزن الذي فقدته لم يكن جسدياً فقط.' عاطفي، سينمائي، إنساني.",visual:"يمشي بثقة. أماكن اجتماعية. لحظة المرآة. ابتسامة حقيقية.",editing:"سينمائي عاطفي. بطيء تأملي.",onScreen:"لم يكن الأمر يتعلق بالوزن فقط قط.",caption:"الجانب من التحول الذي لا يتحدث عنه أحد كفاية. من احتاج هذا؟",cta:["تعليق","مشاركة","رسالة"],goal:"عمق عاطفي / تحويلات"},
+    ]
+  },
+];
+
+const SILENCE_DAYS=[
+  {day:1,title:"التخطيط الاستراتيجي الكامل",sub:"من الفكرة إلى النظام",badge:"تخطيط",
+   tasks:["<strong>اقرأ نظام المحتوى الكامل</strong> من البداية للنهاية — فهم الصورة الكبيرة أولاً","<strong>اكتب هدفك الرئيسي</strong> للـ100 يوم — رقم متابعين واضح، وهدف تحويل واضح","<strong>أنشئ ملف تتبع</strong> (Notion, Excel, ورقة) — كل قطعة، حالتها، تاريخ نشرها","<strong>حدد مواقع التصوير</strong> الثلاثة الرئيسية — الصالة، المنزل، الخارج","<strong>جهّز قائمة الأدوات</strong> — تطبيق مونتاج، تطبيق تتبع سعرات، تطبيق جدولة"],
+   tip:"<strong>قاعدة اليوم 1:</strong> لا تبدأ التصوير اليوم. اليوم لتنظيم الرأس، ليس الكاميرا. المنشئون الذين يخططون جيداً ينتجون ضعف من لا يخططون."},
+  {day:2,title:"كتابة السيناريو الكامل",sub:"30 قطعة مكتوبة بالكامل",badge:"كتابة",
+   tasks:["<strong>اكتب سيناريو كل ريلز</strong> في 3–5 جمل تنفيذية — ماذا تقول، بالضبط، من الثانية الأولى","<strong>اكتب الهوك الافتتاحي</strong> لكل قطعة — يجب أن يكون مختلفاً عن العنوان المكتوب في النظام","<strong>اكتب الكابشن الكامل</strong> لكل منشور — احفظه في ملف منفصل جاهز للنسخ واللصق","<strong>راجع كل هوك</strong> — هل يخلق فضولاً؟ هل يُسبّب ألماً؟ هل يوعد بحل؟","<strong>احذف أي هوك</strong> لا يشدك أنت — إن لم تشعر بالرغبة في المشاهدة، لن يشاهده أحد"],
+   tip:"<strong>قاعدة السيناريو الجيد:</strong> إن لم تستطع قراءته بصوت عالٍ بشكل طبيعي — أعد كتابته. المشاهد يشعر بالاصطناعية فوراً."},
+  {day:3,title:"اختبار الزوايا والإضاءة",sub:"تجارب التصوير قبل البدء الفعلي",badge:"تصوير",
+   tasks:["<strong>جرّب 3 إضاءات مختلفة</strong> في مواقع التصوير المحتملة (صالة، منزل، خارج)","<strong>اختبر 5 زوايا كاميرا</strong> لفيديو الكلام المباشر — أيها يبدو أكثر سلطة وأصالة؟","<strong>سجّل 30 ثانية اختبار</strong> لأول ريلز وشاهده مع صوت ثم بدونه","<strong>اختر موسيقى الخلفية</strong> لكل نوع محتوى — ابحث في TikTok Creative Center","<strong>جهّز حقيبة التصوير:</strong> حامل، إضاءة، ميكروفون، هاتف بشحن كامل"],
+   tip:"<strong>قاعدة الإضاءة:</strong> الإضاءة الطبيعية من نافذة على جانبك تعطي أفضل نتيجة بلا تكلفة. تجنب الإضاءة من الأعلى — تجعل الوجه ثقيلاً."},
+  {day:4,title:"تصوير المرحلة الأولى — الجزء الأول",sub:"5 ريلزات دفعة واحدة",badge:"تصوير",
+   tasks:["<strong>صوّر ريلز 'اليوم الأول في الصالة'</strong> — اذهب للصالة الصباح الباكر واصطحب الكاميرا","<strong>صوّر ريلز 'الميزان'</strong> — اكشف الرقم بثقة، لا تعيد التصوير أكثر من مرتين","<strong>صوّر ريلز 'الأطعمة الكاذبة'</strong> — اذهب للمتجر، أعدّ الأطعمة الـ5 في المنزل أولاً","<strong>صوّر ريلز 'ما أكله في اليوم'</strong> — صوّر كل وجبة يومك الكامل بشكل عفوي","<strong>صوّر ريلز 'الدافعية كذبة'</strong> — غرفة النوم فجراً ثم الصالة"],
+   tip:"<strong>قاعدة الـ5 ريلزات في يوم:</strong> احمل السيناريو على هاتفك واقرأه قبل كل تصوير بدقيقتين فقط. الصدق أهم من الإتقان."},
+  {day:5,title:"تصوير المرحلة الأولى — الجزء الثاني",sub:"5 ريلزات وكاروسيلان",badge:"تصوير",
+   tasks:["<strong>صوّر ريلز 'الأسبوع السيئ'</strong> — في يوم تشعر فيه بالإرهاق حقاً (لا تمثّل)","<strong>صوّر ريلز 'الأكل في العجز'</strong> — ساعة متأخرة، الثلاجة، كل شيء حقيقي","<strong>صوّر ستوريات التعريف الـ5</strong> — من أنت؟ هدفك؟ لماذا الآن؟ استفتاء","<strong>صمّم كاروسيل 'أسباب الفشل'</strong> — 8 شرائح في Canva أو CapCut","<strong>صمّم كاروسيل 'قلق الصالة'</strong> — 8 شرائح عاطفية دافئة"],
+   tip:"<strong>قاعدة الكاروسيل:</strong> أول شريحة تقرر إن كانوا سيتابعون السحب. اجعلها تطرح سؤالاً يريدون إجابته فوراً."},
+  {day:6,title:"تصوير المرحلة الثانية كاملة",sub:"10 قطع للمرحلة 2",badge:"تصوير",
+   tasks:["<strong>صوّر كل ريلزات المرحلة 2</strong> — المقابلات في الصالة، الكارديو، الهضبة، الذكاء الاصطناعي","<strong>التقط صور 'تحديث اليوم 30'</strong> — استخدم نفس إضاءة وزاوية اليوم الصفر","<strong>صمّم كاروسيلات المرحلة 2:</strong> البرنامج التدريبي + الأساطير العشرة","<strong>صوّر ستوري يوم الأكل الكامل</strong> — يتطلب تصوير طوال يوم حقيقي","<strong>صوّر محتوى 'سألت 10 أشخاص'</strong> — اذهب للصالة بميكروفون غير رسمي"],
+   tip:"<strong>قاعدة المقابلات:</strong> اسأل أسئلة بسيطة وودية. لا تطلب مراجعات. ردود الفعل الطبيعية التلقائية هي كل شيء."},
+  {day:7,title:"المونتاج الكامل — الدفعة الأولى",sub:"تعديل ريلزات المرحلة 1",badge:"مونتاج",
+   tasks:["<strong>عدّل الـ10 ريلزات الأولى</strong> — ترجمة + موسيقى + نص الشاشة + تدرج الألوان","<strong>طبّق قواعد المونتاج:</strong> لا موسيقى أول ثانيتين، ترجمة دائماً، نص كلمة كلمة","<strong>اختر صور المصغّرات</strong> لكل ريلز — اللحظة الأكثر توتراً أو عاطفة","<strong>راجع كل ريلز بدون صوت</strong> — هل الرسالة واضحة بالنص فقط؟","<strong>أنشئ مجلداً منظماً:</strong> خام / جاري المونتاج / جاهز للنشر"],
+   tip:"<strong>قاعدة الـ3 ثوانٍ:</strong> إن لم يكن الـ3 ثوانٍ الأولى مشدودة بصرياً — أعد المونتاج. لا نقاش."},
+  {day:8,title:"المونتاج الكامل — الدفعة الثانية",sub:"تعديل ريلزات المرحلة 2 و3",badge:"مونتاج",
+   tasks:["<strong>عدّل الـ10 ريلزات الثانية</strong> — نفس معايير المرحلة الأولى","<strong>عدّل محتوى المرحلة 3:</strong> قبل/بعد وكشف البيانات وعرض المنتج","<strong>صنع طبقات الكشف البياني</strong> لمحتوى البيانات والمقارنات","<strong>جهّز كاروسيلات المرحلة 3</strong> — النظام الكامل وما قبل التحول","<strong>راجع الجودة:</strong> صوت نظيف + صورة واضحة + ترجمة صحيحة في كل قطعة"],
+   tip:"<strong>قاعدة الجودة المتسقة:</strong> المشاهد يحكم على جميع محتواك بناءً على أسوأ ريلز رآه. رفع أدنى مستوى أهم من رفع أعلى مستوى."},
+  {day:9,title:"تحسين الهوك وبناء الانتظار الداخلي",sub:"المراجعة النهائية لكل الأصول",badge:"تحسين",
+   tasks:["<strong>أعد تشغيل كل ريلز</strong> وعدّل الهوك إن لم يشدك في الثانية الأولى","<strong>اكتب الكابشن الكامل</strong> لكل قطعة — احفظه في ملف منفصل جاهز للنسخ","<strong>جهّز الهاشتاغات:</strong> 3 ضخمة + 3 متوسطة + 3 صغيرة + 1 خاص لكل منشور","<strong>أنشئ قصة الإطلاق الداخلية:</strong> كيف ستقدم نفسك في أول 3 أيام؟","<strong>اختبر كل محتوى على شخص واحد</strong> لا علاقة له بعالم اللياقة — ماذا يفهم؟"],
+   tip:"<strong>قاعدة الشخص الغريب:</strong> إن فهم شخص خارج مجالك رسالتك فوراً — ريلزك جاهز. إن لم يفهم — الهوك يحتاج إعادة كتابة."},
+  {day:10,title:"بناء نظام التشغيل النهائي",sub:"الإطلاق على بُعد خطوة واحدة",badge:"إطلاق",
+   tasks:["<strong>أنشئ تقويم النشر الكامل</strong> — كل قطعة في وقت محدد ليوم محدد لـ100 يوم","<strong>تحقق من جميع الحسابات:</strong> بايو محدّث + رابط واحد + قصص الهايلايت جاهزة","<strong>فعّل الردود التلقائية</strong> للكلمات المفتاحية (SYSTEM, FITAI, COACH) إن أتاحتها المنصة","<strong>صوّر ستوريات التشويق الأخيرة</strong> — 'شيء كبير قادم' بدون تفاصيل","<strong>خذ نفساً عميقاً.</strong> 10 أيام من الصمت أعطتك ما يعجز عنه معظم المنشئين — نظام جاهز."],
+   tip:"<strong>قاعدة الإطلاق:</strong> اليوم 11 هو يوم النشر الأول. لا تؤخر. لا تستظرف. المحتوى جاهز والنظام يعمل. الآن دورك فقط الضغط على نشر."},
+];
+
+// ──────────────────────────────────────────────────────────────────
+//  §5  UI STATE & TABS
+// ──────────────────────────────────────────────────────────────────
+
+let ph = 0;
+let filt = 'ALL';
+const TABS = ['content','silence','hooks','strategy','vault'];
+
+function ST(t) {
+  document.querySelectorAll('.tc').forEach(el => el.classList.remove('on'));
+  document.querySelectorAll('.mt').forEach(el => el.classList.remove('on'));
+  document.getElementById('tc-' + t).classList.add('on');
+  document.querySelectorAll('.mt')[TABS.indexOf(t)].classList.add('on');
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  §6  RENDER HELPERS
+// ──────────────────────────────────────────────────────────────────
+
+const TCL = e => ({anger:'t-anger',relatable:'t-relatable',controversy:'t-controversy',aspiration:'t-aspiration',insecurity:'t-insecurity',curiosity:'t-curiosity',humor:'t-humor'}[e]||'t-curiosity');
+const TLC = e => ({anger:'غضب',relatable:'انتماء',controversy:'جدل',aspiration:'طموح',insecurity:'قلق',curiosity:'فضول',humor:'فكاهة'}[e]||e);
+const TYPC = t => ({REEL:'reel',CAROUSEL:'carousel',STORY:'story'}[t]||'');
+const TYPL = t => ({REEL:'ريلز',CAROUSEL:'كاروسيل',STORY:'ستوري'}[t]||t);
+const totalC = () => PHASES.reduce((a,p) => a + p.cards.length, 0);
+const totalD = () => Object.values(S.checked).filter(Boolean).length;
+
+function updateRing() {
+  const tot = totalC(), done = totalD();
+  const c = 2 * Math.PI * 27;
+  document.getElementById('rpath').style.strokeDashoffset = c - (done / tot) * c;
+  document.getElementById('rval').textContent = done;
+  const all = PHASES.flatMap(p => p.cards);
+  document.getElementById('sr').textContent  = all.filter(c => c.type === 'REEL').length;
+  document.getElementById('sc2').textContent = all.filter(c => c.type === 'CAROUSEL').length;
+  document.getElementById('ss').textContent  = all.filter(c => c.type === 'STORY').length;
+  document.getElementById('sd').innerHTML    = `${done}<small>/${tot}</small>`;
+  document.getElementById('sl').textContent  = tot - done;
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  §7  CONTENT TAB
+// ──────────────────────────────────────────────────────────────────
+
+function toggleDone(e, id) {
+  e.stopPropagation();
+  S.checked[id] = !S.checked[id];
+  persist();
+  showSaved();
+  renderC();
+  updateRing();
+}
+
+function togExp(e, id) {
+  e.stopPropagation();
+  S.cExp[id] = !S.cExp[id];
+  persist();
+  renderC();
+}
+
+function saveNote(id, v) {
+  S.notes[id] = v;
+  persist();
+  showSaved();
+}
+
+function SF(e, f) {
+  filt = f;
+  document.querySelectorAll('.fchip').forEach(c => c.classList.remove('on'));
+  e.target.classList.add('on');
+  renderC();
+}
+
+function SP(i) {
+  ph = i;
+  document.querySelectorAll('.ptab').forEach((t, j) => t.classList.toggle('on', j === i));
+  renderC();
+}
+
+function renderC() {
+  const p = PHASES[ph];
+  const done = p.cards.filter(c => S.checked[c.id]).length;
+
+  const items = p.cards.map(c => {
+    const isDone = !!S.checked[c.id];
+    const isOpen = !!S.cExp[c.id];
+    const note   = S.notes[c.id] || '';
+
+    let show = true;
+    if (filt === 'REEL'     && c.type !== 'REEL')     show = false;
+    if (filt === 'CAROUSEL' && c.type !== 'CAROUSEL') show = false;
+    if (filt === 'STORY'    && c.type !== 'STORY')     show = false;
+    if (filt === 'done'     && !isDone)                show = false;
+    if (filt === 'todo'     &&  isDone)                show = false;
+
+    const tags = c.emotion.map(e => `<span class="tag ${TCL(e)}">${TLC(e)}</span>`).join('');
+    const ctas = c.cta.map(t => `<span class="ctap">${t}</span>`).join('');
+
+    return `<div class="iw${show ? '' : ' hide'}">
+      <div class="item${isDone ? ' done' : ''}${isOpen ? ' xpd' : ''}">
+        <div class="irow">
+          <div class="chk${isDone ? ' on' : ''}" onclick="toggleDone(event,'${c.id}')">
+            <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l2.8 2.8L9 1" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="imain">
+            <div class="imeta">
+              <span class="itype ${TYPC(c.type)}">${TYPL(c.type)}</span>
+              <span class="iid">#${c.id}</span>
+            </div>
+            <div class="ihook">${c.hook}</div>
+            <div class="itags">${tags}</div>
+          </div>
+          <div class="ichev${isOpen ? ' on' : ''}" onclick="togExp(event,'${c.id}')">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4.5l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+        <div class="idet${isOpen ? ' on' : ''}">
+          <div class="nota-lbl">ملاحظاتك</div>
+          <textarea class="nota" placeholder="تاريخ التصوير، الحالة، أفكار..." oninput="saveNote('${c.id}',this.value)">${note}</textarea>
+          <div class="dgrid">
+            <div class="db full"><div class="dlbl">السيناريو</div><div class="dval">${c.script}</div></div>
+            <div class="db"><div class="dlbl">التوجيه البصري</div><div class="dval">${c.visual}</div></div>
+            <div class="db"><div class="dlbl">المونتاج</div><div class="dval">${c.editing}</div></div>
+            <div class="db acc full"><div class="dlbl">نص الشاشة</div><div class="dval br">"${c.onScreen}"</div></div>
+            <div class="db full"><div class="dlbl">فكرة الكابشن</div><div class="dval">${c.caption}</div></div>
+            <div class="db full"><div class="dlbl">دعوة للعمل</div><div class="ctawrap">${ctas}</div></div>
+            <div class="db goal full"><div class="dlbl">هدف التحويل</div><div class="dval ok">${c.goal}</div></div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('cmain').innerHTML = `
+    <div class="pbanner">
+      <div class="pstripe"></div>
+      <div class="pbody">
+        <div class="pdays">${p.days}</div>
+        <div class="pname">${p.name}</div>
+        <p class="pgoal">${p.goal}</p>
+      </div>
+      <div class="pstat"><div class="pstat-n">${done}/${p.cards.length}</div><div class="pstat-l">قطعة مكتملة</div></div>
+    </div>
+    <div class="pills">
+      <div class="slbl">تركيز الركيزة — هذه المرحلة</div>
+      <div class="pgrid">${p.pillars.map(pi => `
+        <div class="prow"><span class="prow-n">${pi.l}</span>
+        <div class="prow-t"><div class="prow-f" style="width:${pi.p}%"></div></div>
+        <span class="prow-p">${pi.p}%</span></div>`).join('')}</div>
+    </div>
+    <div class="clhdr">
+      <div class="slbl">قائمة التحقق — ${p.cards.length} قطعة</div>
+      <div class="cldone">${done} / ${p.cards.length} مكتملة</div>
+    </div>
+    ${items}`;
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  §8  SILENCE TAB
+// ──────────────────────────────────────────────────────────────────
+
+function togSilDay(i) {
+  S.silExp[i] = !S.silExp[i];
+  persist();
+  renderSil();
+}
+
+function chkSilDay(e, i) {
+  e.stopPropagation();
+  S.silDone[i] = !S.silDone[i];
+  persist();
+  showSaved();
+  renderSil();
+}
+
+function renderSil() {
+  const done = Object.values(S.silDone).filter(Boolean).length;
+  document.getElementById('sil-done-lbl').textContent = `${done} / 10 مكتمل`;
+  document.getElementById('sdays').innerHTML = SILENCE_DAYS.map((d, i) => {
+    const isOpen = !!S.silExp[i];
+    const isDone = !!S.silDone[i];
+    const tasks  = d.tasks.map(t => `<div class="sdi-task">${t}</div>`).join('');
+    return `<div class="sday${isDone ? ' done-s' : ''}">
+      <div class="sday-hdr" onclick="togSilDay(${i})">
+        <div class="sday-num"><span>يوم</span>${d.day}</div>
+        <div class="sday-wrap">
+          <div><div class="sday-ttl">${d.title}</div><div class="sday-sub">${d.sub}</div></div>
+          <div style="display:flex;align-items:center;gap:7px;flex-shrink:0">
+            <span class="sday-badge">${d.badge}</span>
+            <div class="sday-chev${isOpen ? ' on' : ''}">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4.5l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="sday-body${isOpen ? ' on' : ''}">
+        <div class="sday-inner">
+          <div><div class="sdi-lbl">مهام الإنتاج</div>${tasks}</div>
+          <div><div class="sdi-lbl">نصيحة اليوم</div><div class="sdi-tip">${d.tip}</div></div>
+        </div>
+        <div class="sday-chkrow">
+          <div class="pchk${isDone ? ' on' : ''}" onclick="chkSilDay(event,${i})">
+            <svg width="9" height="7" viewBox="0 0 9 7" fill="none"><path d="M1 3.5l2.5 2.5L8 1" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="pchk-lbl" onclick="chkSilDay(event,${i})">أكملت مهام هذا اليوم</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  §9  HOOKS TAB
+// ──────────────────────────────────────────────────────────────────
+
+function renderHooks() {
+  document.getElementById('hgrid').innerHTML = HOOKS.map(h => {
+    const tags = h.tags.map(t => `<span class="tag ${TCL(t)}">${TLC(t)}</span>`).join('');
+    return `<div class="hk"><div class="hk-tx">"${h.text}"</div><div class="hk-tg">${tags}</div></div>`;
+  }).join('');
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  §10  VAULT TAB
+// ──────────────────────────────────────────────────────────────────
+
+function togVF(id) {
+  document.getElementById(id).classList.toggle('on');
+}
+
+function addPrompt() {
+  const n = document.getElementById('p-name').value.trim();
+  const b = document.getElementById('p-body').value.trim();
+  if (!n || !b) return;
+  S.prompts.push({ id: Date.now(), name: n, text: b });
+  persist();
+  showSaved();
+  renderVault();
+  document.getElementById('p-name').value = '';
+  document.getElementById('p-body').value = '';
+  document.getElementById('pf').classList.remove('on');
+}
+
+function addLink() {
+  const t = document.getElementById('l-title').value.trim();
+  const u = document.getElementById('l-url').value.trim();
+  if (!t || !u) return;
+  S.links.push({ id: Date.now(), title: t, url: u });
+  persist();
+  showSaved();
+  renderVault();
+  document.getElementById('l-title').value = '';
+  document.getElementById('l-url').value   = '';
+  document.getElementById('lf').classList.remove('on');
+}
+
+function delPrompt(id) {
+  S.prompts = S.prompts.filter(p => p.id !== id);
+  persist();
+  renderVault();
+}
+
+function delLink(id) {
+  S.links = S.links.filter(l => l.id !== id);
+  persist();
+  renderVault();
+}
+
+function renderVault() {
+  const pl = document.getElementById('plist');
+  pl.innerHTML = S.prompts.length
+    ? S.prompts.map(p => `
+      <div class="vitem">
+        <div class="vdel" onclick="delPrompt(${p.id})">✕</div>
+        <div class="vitem-ttl">${p.name}</div>
+        <div class="vitem-body">${p.text}</div>
+      </div>`).join('')
+    : '<div class="vempty">لا توجد برومبت محفوظة بعد</div>';
+
+  const ll = document.getElementById('llist');
+  ll.innerHTML = S.links.length
+    ? S.links.map(l => `
+      <div class="vitem">
+        <div class="vdel" onclick="delLink(${l.id})">✕</div>
+        <div class="vitem-ttl">${l.title}</div>
+        <a class="vitem-link" href="${l.url}" target="_blank" rel="noopener noreferrer">${l.url}</a>
+      </div>`).join('')
+    : '<div class="vempty">لا توجد روابط محفوظة بعد</div>';
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  §11  RESET
+// ──────────────────────────────────────────────────────────────────
+
+function resetAll() {
+  if (!confirm('إعادة تعيين جميع البيانات؟ لا يمكن التراجع.')) return;
+  Object.assign(S, {
+    checked: {}, notes: {}, silDone: {}, silExp: {}, cExp: {}, prompts: [], links: []
+  });
+  persist();
+  renderC(); renderSil(); renderHooks(); renderVault(); updateRing();
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  §12  INIT — رندر فوري عند تحميل الصفحة
+// ──────────────────────────────────────────────────────────────────
+
+renderC();
+renderSil();
+renderHooks();
+renderVault();
+updateRing();
+</script>
+</body>
+</html>
